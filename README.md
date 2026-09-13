@@ -1,4 +1,4 @@
-# Micro Observe Kafka
+# Event-Driven Incident Observability Platform
 
 **Event-driven incident investigation · Java 25 · Spring Boot · Kafka**
 
