@@ -25,21 +25,92 @@ This project provides one workflow that:
 
 ## Architecture
 
+Read from **top to bottom**: generate traffic, detect a failure, preserve the work,
+collect evidence, and inspect the result.
+
+### 1. Workload and failure detection
+
 ```mermaid
 flowchart TB
-    Workloads["Gateway · Order · Inventory"] --> Telemetry["Prometheus · Loki · Tempo"]
-    Telemetry -->|metric rule fires| Alertmanager
-    Alertmanager -->|webhook| IncidentAPI["Incident API"]
-    IncidentAPI -->|incident + event in one transaction| PostgreSQL[("PostgreSQL")]
-    PostgreSQL --> Outbox["Outbox publisher"]
-    Outbox --> Kafka
-    Kafka --> Worker["Investigation worker"]
-    Worker -->|query evidence| Telemetry
-    Worker -->|save report + notification event| PostgreSQL
-    Kafka -.->|optional profile| Email["Email consumer"]
-    PostgreSQL --> Grafana
-    Telemetry --> Grafana
+    Client["Client / test script"]
+    Gateway["API Gateway"]
+    Order["Order Service"]
+    Inventory["Inventory Service"]
+    Prom["Prometheus — metrics and alert rules"]
+    Logs["Loki — application logs"]
+    Traces["Tempo — distributed traces"]
+    Alerts["Alertmanager — grouping and recovery"]
+    Intake["Incident API — firing / resolved webhooks"]
+
+    Client -->|HTTP request| Gateway
+    Gateway -->|route order| Order
+    Order -->|check stock| Inventory
+    Gateway -.->|metrics| Prom
+    Order -.->|metrics| Prom
+    Inventory -.->|metrics| Prom
+    Inventory -.->|logs| Logs
+    Inventory -.->|spans| Traces
+    Prom -->|alert state| Alerts
+    Alerts -->|webhook| Intake
+
+    classDef workload fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:2px
+    classDef telemetry fill:#D1FAE5,stroke:#059669,color:#064E3B,stroke-width:2px
+    classDef event fill:#FEF3C7,stroke:#D97706,color:#78350F,stroke-width:2px
+    classDef incident fill:#EDE9FE,stroke:#7C3AED,color:#3B0764,stroke-width:2px
+    class Client,Gateway,Order,Inventory workload
+    class Prom,Logs,Traces telemetry
+    class Alerts event
+    class Intake incident
 ```
+
+Gateway and Order also emit logs and traces; those duplicate edges are omitted for
+readability. The gateway routes client traffic; Alertmanager calls the Incident API
+directly. Loki and Tempo provide evidence, while Prometheus evaluates alert rules.
+
+### 2. Durable investigation and reporting
+
+```mermaid
+flowchart TB
+    Intake["Incident API — validate and deduplicate"]
+    DB[("PostgreSQL — incidents, evidence and outbox")]
+    Publisher["Outbox publisher — retry pending events"]
+    Kafka["Kafka — investigation and notification topics"]
+    Worker["Investigation worker"]
+    Sources["Prometheus / Loki / Tempo"]
+    Desk["Incident Desk — reports through the read API"]
+    Grafana["Grafana — dashboards and telemetry"]
+    Email["Optional email consumer — ON / OFF"]
+
+    Intake -->|atomic incident + outbox write| DB
+    DB -->|read unpublished events| Publisher
+    Publisher -->|publish; mark sent after acknowledgement| Kafka
+    Kafka -->|investigation event| Worker
+    Worker -.->|query five-minute evidence window| Sources
+    Worker -->|save report + notification outbox event| DB
+    Kafka -->|notification event| Email
+    DB -->|read API via gateway| Desk
+    DB -->|stored incident reports| Grafana
+    Sources -.->|explore telemetry| Grafana
+
+    classDef incident fill:#EDE9FE,stroke:#7C3AED,color:#3B0764,stroke-width:2px
+    classDef storage fill:#FFE4E6,stroke:#E11D48,color:#881337,stroke-width:2px
+    classDef event fill:#FEF3C7,stroke:#D97706,color:#78350F,stroke-width:2px
+    classDef telemetry fill:#D1FAE5,stroke:#059669,color:#064E3B,stroke-width:2px
+    classDef interface fill:#CFFAFE,stroke:#0891B2,color:#164E63,stroke-width:2px
+    class Intake,Publisher,Worker incident
+    class DB storage
+    class Kafka,Email event
+    class Sources telemetry
+    class Desk,Grafana interface
+```
+
+**Color key:** blue = workload · green = telemetry · purple = incident processing ·
+rose = persistent storage · amber = events / notifications · cyan = user interfaces.
+
+The API, outbox publisher and investigation worker run inside **one incident-service
+container**. Kafka decouples their work; PostgreSQL preserves incident state and
+pending events. A resolved webhook closes the incident through the same intake
+path. The platform records and investigates failures; it does not repair services.
 
 ## End-to-end flow
 
