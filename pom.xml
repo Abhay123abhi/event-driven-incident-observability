@@ -12,10 +12,10 @@
     </parent>
 
     <groupId>com.microobserve</groupId>
-    <artifactId>micro-observe-kafka</artifactId>
+    <artifactId>event-driven-incident-observability</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>micro-observe-kafka</name>
+    <name>event-driven-incident-observability</name>
 
     <modules>
         <module>api-gateway</module>

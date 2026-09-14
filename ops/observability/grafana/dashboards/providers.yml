@@ -3,7 +3,7 @@ apiVersion: 1
 providers:
   - name: micro-observe-kafka
     orgId: 1
-    folder: Micro Observe Kafka
+    folder: Event-Driven Incident Observability
     type: file
     disableDeletion: false
     editable: true
