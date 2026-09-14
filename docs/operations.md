@@ -31,11 +31,11 @@ incidents; this is not cross-alert incident correlation.
 | Failed investigation | PostgreSQL `incidents`, status `INVESTIGATION_FAILED` | **No automatic expiry** while unresolved. Its exception is logged; there is no separate durable failed-event/DLQ record. If later resolved, the 30-day resolved retention applies. |
 | Published investigation or notification outbox event | PostgreSQL `outbox_events`, in `postgres-data` | Eligible for deletion **7 days after `published_at`**. Publication means Kafka acknowledged the send and the application saved that timestamp; it does not confirm investigation completion or email delivery. |
 | Unpublished outbox event | PostgreSQL `outbox_events` | **No automatic expiry or backlog cap**. Kept for publication retries until successfully marked published. |
-| Investigation and notification topic messages | Kafka, in `kafka-data` | **Not explicitly configured by this repository**; effective broker/topic defaults apply. PostgreSQL's 7-day outbox policy does not control Kafka. Consumed messages are not immediately deleted. |
+| Investigation and notification topic messages | Kafka, in `kafka-data` | Local broker retention is limited to **6 hours** and approximately **128 MB per partition**. PostgreSQL's 7-day outbox policy does not control Kafka. Consumed messages are not immediately deleted. |
 | Raw application logs | Loki, in `loki-data` | **No explicit project retention policy**. Uses the image's local configuration; do not assume logs are removed after 7 or 30 days. |
 | Raw trace data | Tempo, in `tempo-data` | **No explicit project retention policy**. Local block storage uses component defaults; no guaranteed project-level duration or disk budget is declared. |
-| Metrics, including failure and notification counters | Prometheus, in `prometheus-data` | **7-day time retention** for stored samples. No size-based retention is configured. In-process counters are not a durable event history. |
-| Container stdout/stderr | Docker host logging storage | **No Compose rotation policy**; Docker daemon settings apply. This storage is separate from Loki. |
+| Metrics, including failure and notification counters | Prometheus, in `prometheus-data` | Local retention is limited to **24 hours** and **128 MB**. Prometheus applies whichever limit is reached first. In-process counters are not a durable event history. |
+| Container stdout/stderr | Docker host logging storage | Compose rotates each container's JSON logs at **10 MB**, keeping **3 files**. This storage is separate from Loki. |
 | Sent email | Configured SMTP server and recipient mailbox | Provider/mailbox retention applies. The application has **no persistent email-delivery ledger**. Muted events are consumed without sending; Kafka retention still operates independently. |
 
 ### Persistence versus retention
@@ -126,9 +126,10 @@ storage budget, automatic archival or multi-instance worker coordination.
 
 These are proposed improvements, not enabled features:
 
-1. Configure and verify Loki compactor retention, explicit Tempo retention, Kafka
-   time/byte retention, Prometheus size retention and Docker log rotation. Preserve
-   free-space headroom; retention thresholds are not exact disk quotas.
+1. Configure and verify Loki compactor retention and explicit Tempo retention.
+   Revisit the short local Kafka, Prometheus and Docker-log limits for the expected
+   production workload. Preserve free-space headroom; retention thresholds are not
+   exact disk quotas.
 2. Monitor disk usage, oldest unpublished outbox age, pending outbox count, Kafka
    consumer lag and investigation duration. Define operational thresholds before
    accepting more load.

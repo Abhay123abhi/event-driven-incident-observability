@@ -1,10 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
-FROM eclipse-temurin:25-jdk AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends unzip && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache unzip
 
 WORKDIR /workspace
 
@@ -19,13 +17,11 @@ RUN --mount=type=cache,target=/root/.m2 \
       -pl "$SERVICE" -am -DskipTests package && \
     cp "$SERVICE"/target/*.jar /tmp/application.jar
 
-FROM eclipse-temurin:25-jre
+FROM eclipse-temurin:25-jre-alpine
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/* && \
-    groupadd --system --gid 10001 application && \
-    useradd --system --uid 10001 --gid application application
+RUN apk add --no-cache curl && \
+    addgroup -S -g 10001 application && \
+    adduser -S -D -H -u 10001 -G application application
 
 WORKDIR /application
 

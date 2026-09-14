@@ -33,11 +33,14 @@ Wait for the Java containers to become healthy before testing.
 | Prometheus | http://localhost:9090 |
 | Alertmanager | http://localhost:9093 |
 
-Everything published by Compose binds to localhost by default. Kafka and PostgreSQL
-are reachable only within the Docker network. Leave Kafka UI and email disabled
+Everything published by Compose binds to localhost by default. PostgreSQL is exposed
+on the `POSTGRES_PORT` from `.env` (default `5432`) for database inspection; Kafka
+stays inside the Docker network.
+Leave Kafka UI and email disabled
 while learning the core workflow, especially on an 8 GB laptop. If Docker is
 running out of memory, close other applications and check `docker stats`; the full
-observability stack still needs substantial memory without those optional services.
+observability stack has approximately 3 GB of configured container memory without
+those optional services, so allocate at least 4 GB to Docker.
 
 ## Retest the incident flow
 
