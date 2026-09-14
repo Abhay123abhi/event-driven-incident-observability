@@ -1,7 +1,13 @@
-name: micro-observe-kafka
+name: event-driven-incident-observability
+
+x-local-logging: &local-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 x-java-environment: &java-environment
-  JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70.0 -XX:InitialRAMPercentage=25.0
+  JAVA_TOOL_OPTIONS: -XX:InitialRAMPercentage=10 -XX:MaxRAMPercentage=65 -XX:+UseSerialGC
   SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-observability}
   MANAGEMENT_TRACING_ENABLED: ${TRACING_ENABLED:-true}
   ZIPKIN_ENDPOINT: http://tempo:9411/api/v2/spans
@@ -10,6 +16,7 @@ x-java-environment: &java-environment
 x-java-service: &java-service
   restart: unless-stopped
   init: true
+  logging: *local-logging
   security_opt: ["no-new-privileges:true"]
   cap_drop: [ALL]
   networks: [backend]
@@ -24,10 +31,13 @@ services:
   postgres:
     image: postgres:17.11-alpine
     restart: unless-stopped
+    mem_limit: 256m
+    logging: *local-logging
     environment:
       POSTGRES_USER: observe
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-    expose: ["5432"]
+    ports: ["${BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"]
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=40", "-c", "work_mem=2MB"]
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./ops/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -41,11 +51,13 @@ services:
   broker:
     image: confluentinc/cp-kafka:7.9.9
     restart: unless-stopped
+    mem_limit: 512m
+    logging: *local-logging
     expose: ["29092"]
     environment:
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
       KAFKA_NODE_ID: 1
-      KAFKA_HEAP_OPTS: -Xms128m -Xmx384m
+      KAFKA_HEAP_OPTS: -Xms128m -Xmx256m
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:29093
@@ -57,6 +69,9 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_RETENTION_HOURS: 6
+      KAFKA_LOG_RETENTION_BYTES: 134217728
+      KAFKA_LOG_SEGMENT_BYTES: 67108864
     volumes: [kafka-data:/var/lib/kafka/data]
     networks: [backend]
     healthcheck:
@@ -70,7 +85,7 @@ services:
     build:
       context: .
       args: { SERVICE: inventory-service }
-    mem_limit: 384m
+    mem_limit: 320m
     ports: ["${BIND_ADDRESS:-127.0.0.1}:8082:8082"]
     environment:
       <<: *java-environment
@@ -88,7 +103,7 @@ services:
     build:
       context: .
       args: { SERVICE: order-service }
-    mem_limit: 384m
+    mem_limit: 320m
     ports: ["${BIND_ADDRESS:-127.0.0.1}:8081:8081"]
     environment:
       <<: *java-environment
@@ -108,7 +123,7 @@ services:
     build:
       context: .
       args: { SERVICE: incident-service }
-    mem_limit: 448m
+    mem_limit: 384m
     ports: ["${BIND_ADDRESS:-127.0.0.1}:8084:8084"]
     environment:
       <<: *java-environment
@@ -137,7 +152,7 @@ services:
     build:
       context: .
       args: { SERVICE: notification-service }
-    mem_limit: 384m
+    mem_limit: 320m
     ports: ["${BIND_ADDRESS:-127.0.0.1}:8083:8083"]
     environment:
       <<: *java-environment
@@ -162,7 +177,7 @@ services:
     build:
       context: .
       args: { SERVICE: api-gateway }
-    mem_limit: 384m
+    mem_limit: 320m
     ports: ["${BIND_ADDRESS:-127.0.0.1}:9000:9000"]
     environment:
       <<: *java-environment
@@ -180,7 +195,11 @@ services:
   prometheus:
     image: prom/prometheus:v3.14.0
     restart: unless-stopped
-    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    mem_limit: 256m
+    logging: *local-logging
+    environment:
+      GOMEMLIMIT: 220MiB
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=24h", "--storage.tsdb.retention.size=128MB"]
     ports: ["${BIND_ADDRESS:-127.0.0.1}:9090:9090"]
     volumes:
       - ./ops/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -191,6 +210,10 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.34.0
     restart: unless-stopped
+    mem_limit: 128m
+    logging: *local-logging
+    environment:
+      GOMEMLIMIT: 96MiB
     command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
     ports: ["${BIND_ADDRESS:-127.0.0.1}:9093:9093"]
     volumes:
@@ -201,6 +224,10 @@ services:
   loki:
     image: grafana/loki:3.7.7
     restart: unless-stopped
+    mem_limit: 256m
+    logging: *local-logging
+    environment:
+      GOMEMLIMIT: 220MiB
     command: ["-config.file=/etc/loki/local-config.yaml"]
     ports: ["${BIND_ADDRESS:-127.0.0.1}:3100:3100"]
     volumes: [loki-data:/loki]
@@ -209,6 +236,10 @@ services:
   tempo:
     image: grafana/tempo:2.10.8
     restart: unless-stopped
+    mem_limit: 256m
+    logging: *local-logging
+    environment:
+      GOMEMLIMIT: 220MiB
     command: ["-config.file=/etc/tempo.yaml"]
     ports: ["${BIND_ADDRESS:-127.0.0.1}:3200:3200", "${BIND_ADDRESS:-127.0.0.1}:9411:9411"]
     volumes:
@@ -219,6 +250,8 @@ services:
   grafana:
     image: grafana/grafana:12.4.10
     restart: unless-stopped
+    mem_limit: 256m
+    logging: *local-logging
     depends_on: [prometheus, loki, tempo]
     ports: ["${BIND_ADDRESS:-127.0.0.1}:3000:3000"]
     environment:
@@ -237,11 +270,14 @@ services:
   kafka-ui:
     image: provectuslabs/kafka-ui:v0.7.2
     restart: unless-stopped
+    mem_limit: 256m
+    logging: *local-logging
     profiles: [tools]
     depends_on:
       broker: { condition: service_healthy }
     ports: ["${BIND_ADDRESS:-127.0.0.1}:8086:8080"]
     environment:
+      JAVA_OPTS: -Xms64m -Xmx192m
       KAFKA_CLUSTERS_0_NAME: incidents
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: broker:29092
     networks: [backend]

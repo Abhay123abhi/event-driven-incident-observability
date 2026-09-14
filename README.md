@@ -1,123 +1,187 @@
 # Event-Driven Incident Observability Platform
 
-**Event-driven incident investigation · Java 25 · Spring Boot · Kafka**
+**Java 25 · Spring Boot · Kafka · PostgreSQL · Prometheus · Loki · Tempo · Grafana**
 
-Collect metrics, error logs and traces into a persistent incident report when a service alert fires.
+A local incident-investigation platform that turns a monitoring alert into a durable,
+queryable report containing recent metrics, error logs and trace summaries.
 
-[Architecture](#architecture) · [Run locally](#run-locally) · [Testing](docs/testing.md) · [Operations & retention](docs/operations.md)
+[Run locally](#run-locally) · [Verify the complete flow](#verify-the-complete-flow) ·
+[Testing guide](docs/testing.md) · [Operations and retention](docs/operations.md)
 
-## Problem → solution
+## Problem solved
 
-| Problem | What this project does |
-| --- | --- |
-| Incident evidence is scattered across monitoring tools | Collects a five-minute telemetry snapshot into one report |
-| A broker outage can interrupt investigation dispatch | Saves incident state and an outbox event in one PostgreSQL transaction; retries publication |
-| Repeated alerts create noise | Reuses the active incident for repeated webhooks with the same fingerprint |
-| Recovery can arrive before investigation finishes | Keeps resolved incidents closed when late worker results arrive |
+During an incident, engineers normally move between alerts, dashboards, logs and
+traces. An alert can also be duplicated, or lost between database persistence and
+message publication.
+
+This project provides one workflow that:
+
+- accepts firing and resolved Alertmanager webhooks;
+- persists the incident before asynchronous processing begins;
+- publishes work reliably through a transactional outbox;
+- deduplicates repeated alerts using the Alertmanager fingerprint;
+- collects a five-minute evidence window from Prometheus, Loki and Tempo;
+- stores a bounded incident report in PostgreSQL for API and Grafana access.
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph telemetry["Workload & telemetry"]
-        direction TB
-        Services["Gateway · Order · Inventory"]
-        Prom["Prometheus · metrics"]
-        Loki["Loki · logs"]
-        Tempo["Tempo · traces"]
-        Services --> Prom
-        Services --> Loki
-        Services --> Tempo
-    end
-
-    subgraph incidents["Incident service"]
-        direction TB
-        Intake["Incident API · intake & history"]
-        DB[("PostgreSQL · incidents & outbox")]
-        Publisher["Outbox publisher"]
-        Worker["Evidence worker"]
-        Intake -->|atomic write| DB
-        DB -->|pending events| Publisher
-        Worker -->|report + notification event| DB
-    end
-
-    Prom -->|firing / resolved| Alerts["Alertmanager"]
-    Alerts --> Intake
-    Publisher --> Kafka["Kafka"]
-    Kafka -->|investigation topic| Worker
-    Worker -. query .-> Prom
-    Worker -. query .-> Loki
-    Worker -. query .-> Tempo
-    Kafka -->|notification topic| Email["Email service · on/off"]
-    DB --> Grafana["Grafana · incident dashboard"]
-    Prom --> Grafana
-
-    classDef app fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
-    classDef store fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
-    classDef observe fill:#dcfce7,stroke:#16a34a,color:#14532d
-    classDef event fill:#fef3c7,stroke:#d97706,color:#78350f
-    class Services,Intake,Publisher,Worker app
-    class DB store
-    class Prom,Loki,Tempo,Grafana observe
-    class Alerts,Kafka,Email event
+    Workloads["Gateway · Order · Inventory"] --> Telemetry["Prometheus · Loki · Tempo"]
+    Telemetry -->|metric rule fires| Alertmanager
+    Alertmanager -->|webhook| IncidentAPI["Incident API"]
+    IncidentAPI -->|incident + event in one transaction| PostgreSQL[("PostgreSQL")]
+    PostgreSQL --> Outbox["Outbox publisher"]
+    Outbox --> Kafka
+    Kafka --> Worker["Investigation worker"]
+    Worker -->|query evidence| Telemetry
+    Worker -->|save report + notification event| PostgreSQL
+    Kafka -.->|optional profile| Email["Email consumer"]
+    PostgreSQL --> Grafana
+    Telemetry --> Grafana
 ```
 
-**Flow:** detect → persist → queue → collect evidence → report → resolve.
-Grafana displays stored reports and metrics; the worker queries Loki and Tempo for supporting evidence.
+## End-to-end flow
 
-## Tools & design
+1. Prometheus evaluates service metrics and sends a firing alert to Alertmanager.
+2. Alertmanager calls `POST /api/incidents/webhooks/alertmanager`.
+3. The incident service saves the incident and an `incident-investigation` outbox
+   event in the same PostgreSQL transaction.
+4. The outbox publisher retries until Kafka acknowledges the event.
+5. The Kafka worker queries the previous five minutes of metrics, logs and traces.
+6. The worker stores the report and queues an `incident-notification` event.
+7. A resolved webhook closes the same incident; late worker results cannot reopen it.
+8. The API and Grafana expose incident history. Email delivery is optional and off
+   by default.
 
-| Layer | Tools / responsibility |
+## System-design decisions
+
+| Concern | Implementation |
 | --- | --- |
-| Backend | Java 25, Spring Boot, Spring Cloud Gateway; Order and Inventory demo services |
-| Messaging | Kafka investigation and notification topics; transactional outbox; at-least-once publication |
-| Persistence | PostgreSQL, JPA, Flyway; indexed incident history and bounded JSONB evidence |
-| Observability | Micrometer, Prometheus, Alertmanager, Loki, Tempo, Grafana |
-| Quality & delivery | JUnit, Mockito, Testcontainers, Maven Wrapper, Docker Compose, GitHub Actions |
+| Database/Kafka dual-write failure | Transactional outbox; unpublished events are retried |
+| Duplicate alerts | Active incidents are keyed by fingerprint and protected by a partial unique index |
+| Slow evidence collection | Kafka separates webhook intake from investigation work |
+| Kafka redelivery | Consumers and state transitions tolerate repeated processing; delivery remains at least once |
+| Missing telemetry source | The report records partial collection failures instead of discarding the investigation |
+| Recovery race | A resolved incident remains closed when an investigation result arrives late |
+| Unbounded data growth | Paginated history, bounded evidence and scheduled incident/outbox cleanup |
+| Local resource usage | One Compose file, memory caps, short telemetry retention and optional email/Kafka UI profiles |
 
-Reports include metrics, sampled errors, trace summaries and collection failures. Raw telemetry stays in its source system. History is paginated; email sending defaults to off.
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| `incident-service` | Webhook intake, incident history, outbox publisher and evidence worker |
+| `notification-service` | Optional Kafka email consumer with an enable/disable switch |
+| `api-gateway` | Gateway routes and circuit breakers |
+| `order-service`, `inventory-service` | Instrumented workloads used to demonstrate failures |
+| `ops` | PostgreSQL initialization and Prometheus/Grafana/Alertmanager/Tempo configuration |
+| `scripts/smoke-test.ps1` | End-to-end deduplication, investigation and resolution check |
+| `docker-compose.yml` | Complete lightweight local environment |
 
 ## Run locally
 
-**Requires:** Git and running Docker Desktop with Compose. Docker builds Java for you.
+### Requirements
 
-```sh
-git clone https://github.com/Abhay123abhi/micro-observe-kafka.git
-cd micro-observe-kafka
+- Git
+- Docker Desktop with Docker Compose
+- At least 4 GB of memory available to Docker
+
+Java, Maven, Kafka and PostgreSQL do not need to be installed locally.
+
+### 1. Clone and configure
+
+```powershell
+git clone https://github.com/Abhay123abhi/event-driven-incident-observability.git
+cd event-driven-incident-observability
+Copy-Item .env.example .env
 ```
 
-Create `.env` from `.env.example` (`Copy-Item .env.example .env` in PowerShell, `cp .env.example .env` on Linux/macOS). Set `POSTGRES_PASSWORD` and `GRAFANA_ADMIN_PASSWORD`.
+On Linux/macOS, replace the last command with `cp .env.example .env`.
+Set `POSTGRES_PASSWORD` and `GRAFANA_ADMIN_PASSWORD` in `.env`. Email remains off.
 
-```sh
+### 2. Start the stack
+
+```powershell
+docker compose config --quiet
 docker compose up --build -d --remove-orphans
 docker compose ps
 ```
 
-Wait for the Java services to become **healthy**. Existing installations: read the [upgrade steps](docs/operations.md#upgrading-from-the-old-module) first.
+The first build downloads the base images and Maven dependencies. Wait until the
+four default Java services show `healthy`.
 
-| Open | Address |
+### 3. Open the services
+
+| Service | URL / connection |
 | --- | --- |
-| Grafana | http://localhost:3000 — user `admin`, password from `.env` |
-| Incident API | http://localhost:8084/api/incidents |
-| Prometheus / Alertmanager | http://localhost:9090 / http://localhost:9093 |
+| Incident history | http://localhost:8084/api/incidents?scope=all |
+| Grafana | http://localhost:3000 (`admin` / password from `.env`) |
 | API Gateway | http://localhost:9000 |
+| Prometheus alerts | http://localhost:9090/alerts |
+| Alertmanager | http://localhost:9093 |
+| PostgreSQL | `localhost:5432`, database `incident_platform`, user `observe` |
 
-**Smoke test — PowerShell:**
+All published ports bind to `127.0.0.1` by default.
+If port `5432` is already used by a local PostgreSQL installation, set an unused
+`POSTGRES_PORT` (for example `5433`) in `.env` before starting the stack.
+
+## Verify the complete flow
+
+Run the deterministic smoke test from PowerShell:
 
 ```powershell
 .\scripts\smoke-test.ps1
 ```
 
-Checks intake, duplicate alerts, queued investigation and resolution. For a real latency failure, email setup and Java tests, see the [testing guide](docs/testing.md).
+Expected result:
 
-**Email switch:** set `EMAIL_NOTIFICATIONS_ENABLED=true` or `false` in `.env`, configure SMTP when enabling, then apply:
-
-```sh
-docker compose --profile email up --build -d --force-recreate notification-service
+```text
+PASS: <incident-id> was investigated, deduplicated, and resolved.
 ```
 
-## Storage & scope
+The test verifies webhook intake, fingerprint deduplication, PostgreSQL persistence,
+outbox publication, Kafka processing, evidence-report persistence and resolution.
 
-Resolved reports: **30 days after resolution**. Published outbox events: **7 days after publication**. Metrics: **7 days**. Active incidents and unpublished events have no automatic expiry; Kafka, Loki and Tempo have no explicit project retention policy. [Full storage reference →](docs/operations.md#storage-and-growing-data-volumes)
+Inspect the result directly:
 
-Designed for a local, single-instance demo. Delivery can repeat; DLQ/replay and multi-instance coordination are future work. Services bind to localhost. [Operational limits →](docs/operations.md#limits-and-follow-up-work)
+```powershell
+Invoke-RestMethod 'http://localhost:8084/api/incidents?scope=all'
+docker compose exec postgres psql -U observe -d incident_platform -c "SELECT id, fingerprint, status, detected_at, resolved_at FROM incidents ORDER BY detected_at DESC;"
+docker compose exec postgres psql -U observe -d incident_platform -c "SELECT aggregate_id, topic, created_at, published_at FROM outbox_events ORDER BY created_at DESC;"
+```
+
+To generate real slow traffic and watch Prometheus → Alertmanager → incident creation,
+follow [Demonstrate a real failure and recovery](docs/testing.md#demonstrate-a-real-failure-and-recovery).
+
+## Optional tools
+
+Kafka UI is started only when needed:
+
+```powershell
+docker compose --profile tools up -d kafka-ui
+```
+
+Open http://localhost:8086. Email is also optional; see the
+[email testing guide](docs/testing.md#optional-email-and-testing-toggle).
+
+## Stop or reset
+
+```powershell
+docker compose down
+```
+
+This keeps the named volumes. To intentionally delete all local databases, Kafka
+data and telemetry history:
+
+```powershell
+docker compose down -v
+```
+
+## Scope
+
+This is a single-node local demonstration of incident reliability patterns, not a
+production monitoring replacement. It uses at-least-once delivery and one incident
+worker; authentication, DLQ/replay, multi-instance claiming, backups and production
+retention policies are documented as follow-up work in
+[Operations and retention](docs/operations.md#limits-and-follow-up-work).
