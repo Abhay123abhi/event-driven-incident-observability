@@ -71,3 +71,32 @@ jobs:
         with:
           name: incident-ui-previews
           path: /tmp/incident-*.png
+
+  render-static-diagrams:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Render existing Mermaid sources
+        run: |
+          npm install --prefix /tmp/diagram-tools @mermaid-js/mermaid-cli@11.4.2
+          python3 - <<'PY'
+          import re, pathlib, json
+          diagrams = re.findall(r'```mermaid\n(.*?)```', pathlib.Path('README.md').read_text(), re.S)
+          assert len(diagrams) == 2
+          for i, diagram in enumerate(diagrams):
+              pathlib.Path(f'/tmp/architecture-{i}.mmd').write_text(diagram)
+          pathlib.Path('/tmp/puppeteer.json').write_text(json.dumps({'args':['--no-sandbox']}))
+          PY
+          for number in 0 1; do
+            /tmp/diagram-tools/node_modules/.bin/mmdc -i /tmp/architecture-$number.mmd -o /tmp/architecture-$number.svg -p /tmp/puppeteer.json -b transparent -t default
+          done
+          python3 - <<'PY'
+          import pathlib, base64
+          for i in range(2):
+              svg = pathlib.Path(f'/tmp/architecture-{i}.svg').read_bytes()
+              print(f'STATIC_SVG_{i}_BEGIN' + base64.b64encode(svg).decode() + f'STATIC_SVG_{i}_END')
+          PY
