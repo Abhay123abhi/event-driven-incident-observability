@@ -11,7 +11,7 @@
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
                style="max-width:680px;background:#fff;border-radius:14px;overflow:hidden;">
             <tr><td style="padding:30px 36px;background:#101a2c;color:#fff;">
-                <p style="margin:0 0 10px;color:#93c5fd;font-size:12px;letter-spacing:1.5px;">MICRO OBSERVE KAFKA · INCIDENT RESPONSE</p>
+                <p style="margin:0 0 10px;color:#93c5fd;font-size:12px;letter-spacing:1.5px;">EVENT-DRIVEN INCIDENT OBSERVABILITY · INCIDENT RESPONSE</p>
                 <h1 th:text="${incident.title()}" style="margin:0;font-size:25px;line-height:1.35;">Production incident</h1>
                 <p style="margin:12px 0 0;font-size:14px;">
                     <strong th:text="${incident.status()}">FIRING</strong> ·
@@ -41,7 +41,7 @@
             <tr><td style="padding:22px 36px;background:#f8fafc;color:#718096;font-size:12px;line-height:1.8;">
                 Incident ID: <span th:text="${incident.incidentId()}">INCIDENT-ID</span><br/>
                 Observed: <span th:text="${incident.occurredAt()}">timestamp</span><br/>
-                &copy; <span th:text="${year}">2026</span> Micro Observe Kafka
+                &copy; <span th:text="${year}">2026</span> Event-Driven Incident Observability
             </td></tr>
         </table>
     </td></tr>

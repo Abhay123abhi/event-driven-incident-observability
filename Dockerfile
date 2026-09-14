@@ -11,7 +11,7 @@ COPY . .
 ARG SERVICE
 
 RUN --mount=type=cache,target=/root/.m2 \
-    sed -i 's/\r$//' ./mvnw ./api-gateway/mvnw && \
+    sed -i 's/\r$//' ./mvnw && \
     test -n "$SERVICE" && \
     sh ./mvnw --batch-mode --no-transfer-progress \
       -pl "$SERVICE" -am -DskipTests package && \

@@ -1,6 +1,6 @@
 {
   "uid": "micro-observe-kafka-overview",
-  "title": "Micro Observe Kafka - Incident Investigation",
+  "title": "Event-Driven Incident Observability - Incident Investigation",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "15s",
