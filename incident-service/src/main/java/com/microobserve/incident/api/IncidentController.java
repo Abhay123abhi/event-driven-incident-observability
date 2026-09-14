@@ -46,6 +46,11 @@ public class IncidentController {
         return IncidentPage.from(incidentService.incidents(scope, page, size));
     }
 
+    @GetMapping("/{id}")
+    public IncidentView incident(@org.springframework.web.bind.annotation.PathVariable String id) {
+        return IncidentView.from(incidentService.incident(id));
+    }
+
     public record IncidentAccepted(String incidentId) {
     }
 
@@ -73,13 +78,14 @@ public class IncidentController {
             List<String> affectedServices,
             List<String> recommendations,
             java.time.Instant detectedAt,
-            java.time.Instant updatedAt) {
+            java.time.Instant updatedAt,
+            java.time.Instant resolvedAt) {
 
         static IncidentView from(IncidentRecord incident) {
             return new IncidentView(incident.id(), incident.service(), incident.alertName(), incident.status(),
                     incident.severity(), incident.title(),
                     incident.evidence(), incident.affectedServices(), incident.recommendations(),
-                    incident.detectedAt(), incident.updatedAt());
+                    incident.detectedAt(), incident.updatedAt(), incident.resolvedAt());
         }
     }
 }

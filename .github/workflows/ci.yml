@@ -39,3 +39,35 @@ jobs:
 
       - name: Build application container
         run: docker build --build-arg SERVICE=incident-service --tag observe-incident:ci .
+
+  incident-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install browser test tools
+        run: |
+          npm install --prefix /tmp/desk-browser playwright@1.51.1
+          /tmp/desk-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Check UI in Chromium
+        env:
+          PLAYWRIGHT_MODULE: /tmp/desk-browser/node_modules/playwright
+        run: |
+          node --check api-gateway/src/main/resources/static/desk.js
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory api-gateway/src/main/resources/static > /tmp/desk-server.log 2>&1 &
+          desk_server_pid=$!
+          trap 'kill "$desk_server_pid"' EXIT
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:8765/ > /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/ui-check.cjs
+      - name: Save UI previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: incident-ui-previews
+          path: /tmp/incident-*.png
