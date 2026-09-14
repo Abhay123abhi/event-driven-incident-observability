@@ -4,9 +4,12 @@ server:
 distributor:
   receivers:
     zipkin:
+      endpoint: 0.0.0.0:9411
 
 storage:
   trace:
     backend: local
+    wal:
+      path: /tmp/tempo/wal
     local:
       path: /tmp/tempo/blocks

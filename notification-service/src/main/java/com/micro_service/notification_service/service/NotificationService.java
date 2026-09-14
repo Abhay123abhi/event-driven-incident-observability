@@ -26,18 +26,20 @@ public class NotificationService {
     private final TemplateEngine templateEngine;
     private final NotificationProperties properties;
     private final MeterRegistry meters;
+    private final EmailControl control;
 
     public NotificationService(JavaMailSender javaMailSender, TemplateEngine templateEngine,
-                               NotificationProperties properties, MeterRegistry meters) {
+                               NotificationProperties properties, MeterRegistry meters, EmailControl control) {
         this.javaMailSender = javaMailSender;
         this.templateEngine = templateEngine;
         this.properties = properties;
         this.meters = meters;
+        this.control = control;
     }
 
     @KafkaListener(topics = "${incident.topic:incident-notification}")
     public void listen(IncidentEvent incident) {
-        if (!properties.enabled()) {
+        if (!control.enabled()) {
             meters.counter("incident.notification.suppressed", "service", incident.service(),
                     "status", incident.status()).increment();
             log.debug("Email disabled; skipped notification for incident {}", incident.incidentId());

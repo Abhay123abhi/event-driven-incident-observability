@@ -60,6 +60,8 @@ An unavailable telemetry source appears in the report; it is not treated as proo
 of healthy service. This test does not prove Prometheus alert evaluation, SMTP
 delivery, or useful telemetry content. Use the failure demonstration below for that.
 
+See [Failure demonstrations](failure-demos.md) for the complete scenario matrix, timings, and reusable failure-test.ps1 script.
+
 ## Demonstrate a real failure and recovery
 
 Add `SPRING_PROFILES_ACTIVE=observability,demo` to `.env` and recreate Inventory:
@@ -125,8 +127,8 @@ docker compose --profile email up -d --force-recreate notification-service
 ```
 
 Use `--build` too when first installing this code change. `docker compose restart`
-does not reload environment changes. This is a restart-applied switch, not a live
-UI toggle. Turning it off cannot recall a message already accepted by SMTP.
+does not reload environment changes. This environment variable sets the startup default. Incident Desk at port 9000
+also has a live Email settings switch; live changes reset to this default on restart. Turning it off cannot recall a message already accepted by SMTP.
 
 When off, the Kafka listener still consumes notifications, records
 `incident_notification_suppressed_total` and returns normally without rendering
@@ -138,7 +140,7 @@ email before that backlog is drained can send older notifications.
 Test with the service running and sending off: run `.\scripts\smoke-test.ps1`, confirm
 no email arrives, and inspect
 `http://localhost:8083/actuator/metrics/incident.notification.suppressed`.
-Then turn sending on, recreate the container and rerun the smoke test with valid
+Then turn sending on through Incident Desk (or recreate with the environment default) and rerun the smoke test with valid
 SMTP settings. Expect an investigation and recovery notification; duplicates are possible because delivery is at least once. The switch mutes all
 email; it does not add throttling, digests or durable delivery deduplication. A successful
 SMTP send means the server accepted the message, not that it reached the inbox.

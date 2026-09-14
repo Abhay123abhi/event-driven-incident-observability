@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Incident Desk</title><link rel="stylesheet" href="/desk.css"><script src="/desk.js" defer></script></head>
+<body>
+<header><a class="brand" href="/"><span class="mark">◉</span> Incident Desk <span class="local">LOCAL</span></a>
+<nav aria-label="Tools"><a id="grafana" target="_blank" rel="noopener">Grafana ↗</a><a id="prometheus" target="_blank" rel="noopener">Prometheus ↗</a><button id="emailOpen">Email settings</button></nav></header>
+<main>
+<section class="heading"><div><p class="eyebrow">EVENT-DRIVEN OBSERVABILITY</p><h1>Every incident.<br><span>A clearer picture.</span></h1><p class="intro">Follow failures from the first alert to the evidence and recovery.</p></div><div class="refresh"><button id="refresh">↻ Refresh</button><label><input id="auto" type="checkbox" checked> Refresh every 15s</label><p id="synced" aria-live="polite">Connecting…</p></div></section>
+<section class="cards" aria-label="Incident totals">
+<button class="card" data-scope="all"><span>Total incidents</span><strong id="allCount">—</strong><small>All recorded history</small></button>
+<button class="card active" data-scope="active"><span>Awaiting recovery</span><strong id="activeCount">—</strong><small>Includes investigated and failed</small></button>
+<button class="card resolved" data-scope="resolved"><span>Resolved</span><strong id="resolvedCount">—</strong><small>Recovery webhook received</small></button>
+</section>
+<section class="panel"><div class="panelHeading"><div><h2>Incident activity</h2><p>Investigated means evidence is ready. Resolved means recovery was reported.</p></div><a href="/failure-guide.html">Failure test guide ↗</a></div>
+<div class="filters"><label>Status<select id="scope"><option value="all">All incidents</option><option value="active">Awaiting recovery</option><option value="resolved">Resolved</option></select></label><label class="search">Search this page<input id="search" type="search" placeholder="Service, alert or incident ID"></label><label>Rows<select id="size"><option>20</option><option>50</option><option>100</option></select></label></div>
+<p id="error" class="error" role="alert" hidden></p>
+<div class="tableWrap"><table><thead><tr><th>Incident / service</th><th>Severity</th><th>Status</th><th>Detected</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+<div id="empty" class="empty" hidden><h3>No incidents in this view</h3><p>Try another filter, or follow the failure test guide to generate an alert.</p></div>
+<footer class="pager"><span id="pageInfo">Loading incidents…</span><div><button id="prev" disabled>← Previous</button><button id="next" disabled>Next →</button></div></footer>
+</section><p class="footnote">Evidence is a saved snapshot. Open Grafana to explore live metrics, logs and traces.</p>
+</main>
+<dialog id="detail"><div class="dialogHead"><span class="eyebrow">INCIDENT REPORT</span><button data-close="detail" aria-label="Close incident details">✕</button></div><div id="detailBody"></div></dialog>
+<dialog id="email"><div class="dialogHead"><span class="eyebrow">NOTIFICATIONS</span><button data-close="email" aria-label="Close email settings">✕</button></div><h2>Email notifications</h2><p>Control investigation and recovery emails from this running instance.</p><p id="emailStatus" role="status">Checking notification service…</p><button id="emailToggle" role="switch" aria-checked="false" disabled>Checking…</button><p id="emailError" class="error" role="alert" hidden></p><div class="note"><strong>One-time setup</strong><p>Configure SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, NOTIFICATION_FROM and ALERT_EMAIL_TO in your local .env file. Credentials stay on the server.</p><code>docker compose --profile email up --build -d notification-service</code></div><p class="muted">The switch applies immediately to subsequent event processing. An in-flight email may still finish. Muted events are consumed, not saved for later delivery.</p><p class="muted">On restart, the switch returns to EMAIL_NOTIFICATIONS_ENABLED from .env. The switch does not edit that file. SMTP configuration is checked for completeness, not delivery.</p></dialog>
+</body></html>

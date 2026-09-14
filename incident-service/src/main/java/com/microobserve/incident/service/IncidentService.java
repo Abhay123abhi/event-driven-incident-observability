@@ -76,6 +76,12 @@ public class IncidentService {
         };
     }
 
+    @Transactional(readOnly = true)
+    public IncidentRecord incident(String id) {
+        return repository.findById(id).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Incident not found"));
+    }
+
     private String resolve(String fingerprint) {
         var incident = repository.findFirstByFingerprintOrderByDetectedAtDesc(fingerprint)
                 .orElseThrow(() -> new IllegalArgumentException("No incident exists for " + fingerprint));

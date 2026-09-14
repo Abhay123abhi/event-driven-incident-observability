@@ -6,7 +6,7 @@ A local incident-investigation platform that turns a monitoring alert into a dur
 queryable report containing recent metrics, error logs and trace summaries.
 
 [Run locally](#run-locally) · [Verify the complete flow](#verify-the-complete-flow) ·
-[Testing guide](docs/testing.md) · [Operations and retention](docs/operations.md)
+[Failure demos and timings](docs/failure-demos.md) · [Testing guide](docs/testing.md) · [Operations and retention](docs/operations.md)
 
 ## Problem solved
 
@@ -117,7 +117,7 @@ four default Java services show `healthy`.
 | --- | --- |
 | Incident history | http://localhost:8084/api/incidents?scope=all |
 | Grafana | http://localhost:3000 (`admin` / password from `.env`) |
-| API Gateway | http://localhost:9000 |
+| Incident Desk UI + Gateway | http://localhost:9000 |
 | Prometheus alerts | http://localhost:9090/alerts |
 | Alertmanager | http://localhost:9093 |
 | PostgreSQL | `localhost:5432`, database `incident_platform`, user `observe` |
@@ -125,6 +125,49 @@ four default Java services show `healthy`.
 All published ports bind to `127.0.0.1` by default.
 If port `5432` is already used by a local PostgreSQL installation, set an unused
 `POSTGRES_PORT` (for example `5433`) in `.env` before starting the stack.
+
+## Incident Desk
+
+Open **http://localhost:9000** for incident history, status filters, page search,
+and report details. Metrics, error samples, trace summaries and collection warnings
+are separated for readability. The lifecycle shows recorded detection, update and
+resolution timestamps; it does not invent worker-stage history.
+Grafana stays available for dashboards and detailed telemetry exploration.
+The UI is served by the gateway with plain HTML/CSS/JavaScript; no extra frontend
+container, Node installation or browser-to-database access is needed.
+
+**Email settings** opens the live on/off control. First configure SMTP_HOST,
+SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, NOTIFICATION_FROM and ALERT_EMAIL_TO
+in .env, then start the optional consumer:
+
+```powershell
+docker compose --profile email up --build -d notification-service
+```
+
+The switch takes effect for subsequent events without restarting. Off consumes
+events without sending; in-flight mail may finish. On restart it returns to
+EMAIL_NOTIFICATIONS_ENABLED from .env (false by default). Missing SMTP settings
+disable enabling; complete settings do not guarantee delivery. The UI never exposes
+credentials. These local admin endpoints are unauthenticated: retain localhost
+bindings; add authentication before hosting the gateway publicly.
+
+## Failure scenarios
+
+| Test | Alert / expected evidence | Timing |
+| --- | --- | --- |
+| Inventory latency | HighResponseLatency | P95 >2s for 2m with traffic |
+| Inventory HTTP errors | HighErrorRate | >5% 5xx for 2m with traffic |
+| Gateway → Order → Inventory failure | Per-service errors and available traces | Depends on thresholds |
+| Workload stopped | ServiceUnavailable | Scrape failure for 3m |
+| Kafka stopped | Unpublished outbox events | Retries when broker returns |
+| Loki / Tempo stopped | Explicit collection warning | During next investigation |
+| Duplicate webhook | Same incident ID | On intake |
+| DB pool saturation | DatabaseConnectionPoolSaturation | >90% active connections for 2m; advanced test |
+
+Allow an additional 15s scrape/evaluation cadence, 30s new alert-group wait, and
+up to 5m group-update delay. Recovery can lag while the 5m metric window clears.
+These are configured thresholds, not measured end-to-end guarantees.
+**[Copy-paste tests and recovery steps →](docs/failure-demos.md)**
 
 ## Verify the complete flow
 

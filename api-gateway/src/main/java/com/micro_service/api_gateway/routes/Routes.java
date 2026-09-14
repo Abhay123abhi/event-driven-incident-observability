@@ -76,6 +76,17 @@ public class Routes {
     }
 
     @Bean
+    public RouterFunction<ServerResponse> notificationSettingsRoute(
+            @org.springframework.beans.factory.annotation.Value("${NOTIFICATION_SERVICE_URL:http://localhost:8083}") String url) {
+        return GatewayRouterFunctions.route("notification_settings")
+                .route(RequestPredicates.path("/api/notification-settings")
+                        .and(RequestPredicates.method(HttpMethod.GET)
+                                .or(RequestPredicates.method(HttpMethod.PUT))), HandlerFunctions.http())
+                .before(uri(url))
+                .build();
+    }
+
+    @Bean
     public RouterFunction<ServerResponse> fallbackRoute() {
         return route("fallbackRoute")
                 .GET("/fallbackRoute", request -> ServerResponse.status(HttpStatus.SERVICE_UNAVAILABLE).body("Service Unavailable, please try again later"))

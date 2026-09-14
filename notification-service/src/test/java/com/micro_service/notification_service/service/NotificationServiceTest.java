@@ -27,7 +27,9 @@ class NotificationServiceTest {
 
     private NotificationService service(boolean enabled) {
         return new NotificationService(mail, templates,
-                new NotificationProperties(enabled, "sender@example.invalid", "recipient@example.invalid"), meters);
+                new NotificationProperties(enabled, "sender@example.invalid", "recipient@example.invalid"), meters,
+                new EmailControl(new NotificationProperties(enabled, "sender@example.invalid", "recipient@example.invalid"),
+                        "smtp.local", "user", "password", true));
     }
 
     @Test
@@ -37,6 +39,21 @@ class NotificationServiceTest {
         verifyNoInteractions(mail, templates);
         assertThat(meters.get("incident.notification.suppressed").counter().count()).isEqualTo(5);
         assertThat(meters.find("incident.notification.sent").counter()).isNull();
+    }
+
+    @Test
+    void liveSwitchControlsTheExistingConsumer() {
+        var properties = new NotificationProperties(false, "sender@example.invalid", "recipient@example.invalid");
+        var control = new EmailControl(properties, "smtp.local", "user", "password", true);
+        var consumer = new NotificationService(mail, templates, properties, meters, control);
+        consumer.listen(event());
+        verifyNoInteractions(mail);
+        control.update(true);
+        consumer.listen(event());
+        verify(mail, times(1)).send(any(MimeMessagePreparator.class));
+        control.update(false);
+        consumer.listen(event());
+        verify(mail, times(1)).send(any(MimeMessagePreparator.class));
     }
 
     @Test
