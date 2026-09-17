@@ -10,7 +10,7 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 public record AiProperties(
         boolean enabled,
-        @NotBlank String apiKey,
+        String apiKey,
         @NotBlank String baseUrl,
         @NotBlank String generationModel,
         @NotBlank String embeddingModel,
