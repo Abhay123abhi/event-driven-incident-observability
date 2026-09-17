@@ -76,6 +76,16 @@ public class Routes {
     }
 
     @Bean
+    public RouterFunction<ServerResponse> aiInvestigationRoute(
+            @org.springframework.beans.factory.annotation.Value("${AI_SERVICE_URL:http://localhost:8085}") String url) {
+        return GatewayRouterFunctions.route("ai_investigation_service")
+                .route(RequestPredicates.path("/api/ai/**"), HandlerFunctions.http())
+                .before(uri(url))
+                .filter(circuitBreaker("aiInvestigationCircuitBreaker", URI.create("forward:/fallbackRoute")))
+                .build();
+    }
+
+    @Bean
     public RouterFunction<ServerResponse> notificationSettingsRoute(
             @org.springframework.beans.factory.annotation.Value("${NOTIFICATION_SERVICE_URL:http://localhost:8083}") String url) {
         return GatewayRouterFunctions.route("notification_settings")
