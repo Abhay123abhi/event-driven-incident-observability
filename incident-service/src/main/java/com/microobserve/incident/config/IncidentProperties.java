@@ -18,6 +18,8 @@ public record IncidentProperties(
         @NotNull URI grafanaUrl,
         @NotBlank String investigationTopic,
         @NotBlank String notificationTopic,
+        boolean aiEnabled,
+        @NotBlank String aiInvestigationTopic,
         @Min(1) @Max(50) int maximumLogLines,
         @Min(1) @Max(100) int maximumPageSize,
         @Min(1) @Max(3_650) int resolvedRetentionDays,
