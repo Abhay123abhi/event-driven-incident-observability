@@ -7,6 +7,7 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -33,7 +34,12 @@ public class GeminiClient {
                 .header("x-goog-api-key", properties.apiKey())
                 .body(body).retrieve().body(JsonNode.class);
         var values = response.path("embedding").path("values");
-        return values.valueStream().map(JsonNode::asDouble).toList();
+        var embedding = new ArrayList<Double>();
+        values.forEach(value -> embedding.add(value.asDouble()));
+        if (embedding.size() != properties.embeddingDimensions()) {
+            throw new IllegalStateException("Unexpected embedding dimension: " + embedding.size());
+        }
+        return List.copyOf(embedding);
     }
 
     public RootCauseHypothesis generateStructured(String prompt) {
@@ -60,7 +66,11 @@ public class GeminiClient {
         JsonNode response = restClient.post().uri(url)
                 .header("x-goog-api-key", properties.apiKey())
                 .body(body).retrieve().body(JsonNode.class);
-        String json = response.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
+        JsonNode candidates = response.path("candidates");
+        if (candidates.isEmpty()) {
+            throw new IllegalStateException("Gemini returned no candidates");
+        }
+        String json = candidates.get(0).path("content").path("parts").get(0).path("text").asText();
         try {
             return objectMapper.readValue(json, RootCauseHypothesis.class);
         } catch (RuntimeException exception) {
