@@ -48,6 +48,22 @@ services:
       timeout: 5s
       retries: 12
 
+  ai-db-init:
+    image: pgvector/pgvector:0.8.6-pg17
+    profiles: [ai]
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ "$$(psql -h postgres -U observe -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='ai_investigation'\")" != "1" ]; then
+          psql -h postgres -U observe -d postgres -c "CREATE DATABASE ai_investigation";
+        fi
+    networks: [backend]
+
   broker:
     image: confluentinc/cp-kafka:7.9.9
     restart: unless-stopped
@@ -171,7 +187,7 @@ services:
       AI_RETRIEVAL_TOP_K: ${AI_RETRIEVAL_TOP_K:-5}
     depends_on:
       broker: { condition: service_healthy }
-      postgres: { condition: service_healthy }
+      ai-db-init: { condition: service_completed_successfully }
     healthcheck:
       <<: *java-healthcheck
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8085/actuator/health"]
