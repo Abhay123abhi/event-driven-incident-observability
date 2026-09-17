@@ -23,6 +23,7 @@
         <module>order-service</module>
         <module>incident-service</module>
         <module>notification-service</module>
+        <module>ai-investigation-service</module>
     </modules>
 
     <properties>
