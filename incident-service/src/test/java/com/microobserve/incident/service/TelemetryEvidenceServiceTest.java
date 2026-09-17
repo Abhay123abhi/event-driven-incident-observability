@@ -34,7 +34,7 @@ class TelemetryEvidenceServiceTest {
         try {
             var uri = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
             var properties = new IncidentProperties(uri, uri, uri, uri,
-                    "investigation", "notification", 10, 100, 30, 7);
+                    "investigation", "notification", false, "incident-ai-analysis", 10, 100, 30, 7);
             var service = new TelemetryEvidenceService(RestClient.builder(), properties);
             var alert = new AlertmanagerWebhook.Alert("firing",
                     Map.of("service", "inventory-service", "alertname", "HighResponseLatency"),

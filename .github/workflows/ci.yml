@@ -34,11 +34,16 @@ jobs:
           export SMTP_PASSWORD="$(openssl rand -hex 24)"
           export NOTIFICATION_FROM="ci@example.invalid"
           export ALERT_EMAIL_TO="operations@example.invalid"
-          docker compose --profile tools --profile email config --quiet
-          docker compose --profile tools --profile email config --format json | python -c 'import json, sys; services = json.load(sys.stdin)["services"]; names = ("inventory-service", "order-service", "incident-service", "notification-service", "api-gateway"); required = ("interval", "timeout", "retries", "start_period"); missing = {name: [key for key in required if key not in services[name]["healthcheck"]] for name in names}; assert not any(missing.values()), f"Missing Java health-check settings: {missing}"'
+          export AI_INVESTIGATION_ENABLED=true
+          export GEMINI_API_KEY="ci-placeholder"
+          docker compose --profile tools --profile email --profile ai config --quiet
+          docker compose --profile tools --profile email --profile ai config --format json | python -c 'import json, sys; services = json.load(sys.stdin)["services"]; names = ("inventory-service", "order-service", "incident-service", "notification-service", "ai-investigation-service", "api-gateway"); required = ("interval", "timeout", "retries", "start_period"); missing = {name: [key for key in required if key not in services[name]["healthcheck"]] for name in names}; assert not any(missing.values()), f"Missing Java health-check settings: {missing}"'
 
-      - name: Build application container
+      - name: Build incident application container
         run: docker build --build-arg SERVICE=incident-service --tag observe-incident:ci .
+
+      - name: Build AI investigation container
+        run: docker build --build-arg SERVICE=ai-investigation-service --tag observe-ai-investigation:ci .
 
   incident-ui:
     runs-on: ubuntu-latest
