@@ -1,7 +1,9 @@
 package com.microobserve.incident.service;
 
 import com.microobserve.incident.config.IncidentProperties;
+import com.microobserve.incident.model.AiInvestigationRequested;
 import com.microobserve.incident.model.IncidentAnalysis;
+import com.microobserve.incident.model.IncidentEvidence;
 import com.microobserve.incident.repository.IncidentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +23,7 @@ public class InvestigationResultService {
     }
 
     @Transactional
-    public boolean complete(String incidentId, IncidentAnalysis analysis) {
+    public boolean complete(String incidentId, IncidentAnalysis analysis, IncidentEvidence evidence) {
         var incident = repository.findById(incidentId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown incident " + incidentId));
         if (incident.investigationFinished()) return false;
@@ -29,6 +31,10 @@ public class InvestigationResultService {
         repository.save(incident);
         outbox.enqueue(incident.id(), properties.notificationTopic(),
                 IncidentService.toEvent(incident, properties.grafanaUrl().toString()));
+        if (properties.aiEnabled()) {
+            outbox.enqueue(incident.id(), properties.aiInvestigationTopic(),
+                    AiInvestigationRequested.from(incident.id(), evidence));
+        }
         return true;
     }
 
