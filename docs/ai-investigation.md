@@ -39,18 +39,14 @@ GEMINI_API_KEY=...
 
 The generation and embedding model names are configurable in `.env`. The default embedding dimension is 768 and matches the `vector(768)` schema.
 
-Because `ai_investigation` is a new database, an existing PostgreSQL volume created before this feature does not contain it. For the simplest local demo, reset local volumes once:
-
-```powershell
-docker compose down -v
-```
-
-This intentionally deletes local demo data. Then start the AI profile:
+Start the optional AI profile:
 
 ```powershell
 docker compose --profile ai up --build -d --remove-orphans
 docker compose ps
 ```
+
+The `ai-db-init` helper creates `ai_investigation` if an older PostgreSQL volume does not already contain it, so enabling AI does not require deleting existing local incident data.
 
 Expected additional service:
 
