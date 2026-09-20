@@ -31,7 +31,7 @@ public class GeminiClient {
         String url = "%s/models/%s:embedContent".formatted(properties.baseUrl(), properties.embeddingModel());
         var body = Map.of(
                 "content", Map.of("parts", List.of(Map.of("text", text))),
-                "output_dimensionality", EMBEDDING_DIMENSIONS;
+                "output_dimensionality", EMBEDDING_DIMENSIONS);
         JsonNode response = restClient.post().uri(url)
                 .header("x-goog-api-key", properties.apiKey())
                 .body(body).retrieve().body(JsonNode.class);
