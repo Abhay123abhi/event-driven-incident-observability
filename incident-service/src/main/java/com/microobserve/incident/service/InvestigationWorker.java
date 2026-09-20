@@ -41,8 +41,9 @@ public class InvestigationWorker {
         repository.save(incident);
 
         try {
-            var analysis = investigator.investigate(evidenceService.collect(request.alert()));
-            if (resultService.complete(incident.id(), analysis)) {
+            var evidence = evidenceService.collect(request.alert());
+            var analysis = investigator.investigate(evidence);
+            if (resultService.complete(incident.id(), analysis, evidence)) {
                 meters.counter("incident.investigated", "service", incident.service(), "severity", analysis.severity()).increment();
                 log.info("Completed investigation {} for {}", incident.id(), incident.service());
             }
