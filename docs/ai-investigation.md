@@ -37,7 +37,7 @@ AI_INVESTIGATION_ENABLED=true
 GEMINI_API_KEY=...
 ```
 
-The generation and embedding model names are configurable in `.env`. The default embedding dimension is 768 and matches the `vector(768)` schema.
+The generation and embedding model names are configurable in `.env`. The vector dimension is intentionally fixed at 768 so the Gemini embedding output always matches the PostgreSQL `vector(768)` schema. The default generation model remains `gemini-3.8-flash`; Google currently lists standard input and output as free of charge on the Free Tier, subject to rate limits. Structured JSON output is supported, and deprecated sampling parameters such as `temperature` are intentionally omitted.
 
 Start the optional AI profile:
 
@@ -120,7 +120,7 @@ The AI result is deliberately called a hypothesis. It is never treated as the au
 - Kafka delivery is at least once. The AI service checks `incident_id` before calling the LLM and the database also has a unique constraint, so completed incidents are idempotent.
 - Retrieved documents are treated as untrusted reference text. The prompt explicitly tells the model not to follow instructions found inside RAG documents.
 - RAG context is bounded before prompting to avoid sending unlimited document content to the model.
-- The embedding dimension is configurable, but changing it requires changing the PostgreSQL vector column and re-embedding existing documents.
+- The embedding dimension is fixed at 768. Changing it is a schema migration: update the PostgreSQL vector column and re-embed all existing knowledge.
 - Embeddings produced by different embedding model families must not be mixed in the same similarity space. Re-embed all knowledge when changing embedding models.
 
 ## Next stages

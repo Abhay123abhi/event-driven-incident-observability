@@ -14,7 +14,6 @@ public record AiProperties(
         @NotBlank String baseUrl,
         @NotBlank String generationModel,
         @NotBlank String embeddingModel,
-        @Min(128) @Max(3072) int embeddingDimensions,
         @Min(1) @Max(20) int retrievalTopK,
         @NotBlank String investigationTopic) {
 }

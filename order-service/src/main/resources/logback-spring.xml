@@ -16,10 +16,6 @@
             <url>${LOKI_URL}</url>
             <connectionTimeoutMs>5000</connectionTimeoutMs>
             <requestTimeoutMs>5000</requestTimeoutMs>
-            <retryConfig>
-                <maxRetries>3</maxRetries>
-                <initialDelayMs>100</initialDelayMs>
-            </retryConfig>
         </http>
         <format>
             <label>
@@ -44,8 +40,12 @@
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
-        <springProfile name="observability">
-            <appender-ref ref="LOKI"/>
-        </springProfile>
     </root>
+
+    <springProfile name="observability">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="LOKI"/>
+        </root>
+    </springProfile>
 </configuration>
