@@ -49,7 +49,7 @@ services:
       retries: 12
 
   broker:
-    image: confluentinc/cp-kafka:7.9.9
+    image: confluentinc/cp-kafka:7.9.10
     restart: unless-stopped
     mem_limit: 512m
     logging: *local-logging
