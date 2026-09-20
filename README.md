@@ -6,7 +6,8 @@ A local incident-investigation platform that turns a monitoring alert into a dur
 queryable report containing recent metrics, error logs and trace summaries.
 
 [Run locally](#run-locally) · [Verify the complete flow](#verify-the-complete-flow) ·
-[Failure demos and timings](docs/failure-demos.md) · [Testing guide](docs/testing.md) · [Operations and retention](docs/operations.md)
+[AI investigation flow](docs/ai-investigation.md) · [Failure demos and timings](docs/failure-demos.md) ·
+[Testing guide](docs/testing.md) · [Operations and retention](docs/operations.md)
 
 ## Problem solved
 
@@ -144,11 +145,24 @@ path. The platform records and investigates failures; it does not repair service
 | --- | --- |
 | `incident-service` | Webhook intake, incident history, outbox publisher and evidence worker |
 | `notification-service` | Optional Kafka email consumer with an enable/disable switch |
+| `ai-investigation-service` | Optional Gemini + pgvector RAG service that stores RCA hypotheses separately from incident truth |
 | `api-gateway` | Gateway routes and circuit breakers |
 | `order-service`, `inventory-service` | Instrumented workloads used to demonstrate failures |
 | `ops` | PostgreSQL initialization and Prometheus/Grafana/Alertmanager/Tempo configuration |
 | `scripts/smoke-test.ps1` | End-to-end deduplication, investigation and resolution check |
 | `docker-compose.yml` | Complete lightweight local environment |
+
+## Optional AI investigation
+
+The deterministic incident workflow remains the source of truth. When the optional `ai`
+profile is enabled, completed incident evidence is published through the same
+transactional outbox to Kafka, consumed by `ai-investigation-service`, embedded,
+retrieved against pgvector knowledge, and sent to Gemini for a structured RCA
+hypothesis. AI failure does not block normal incident persistence, investigation or
+resolution.
+
+See [AI investigation flow](docs/ai-investigation.md) for setup, RAG seeding and the
+complete incident → retrieval → LLM flow.
 
 ## Run locally
 
