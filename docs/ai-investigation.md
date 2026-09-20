@@ -37,7 +37,7 @@ AI_INVESTIGATION_ENABLED=true
 GEMINI_API_KEY=...
 ```
 
-The generation and embedding model names are configurable in `.env`. The vector dimension is intentionally fixed at 768 so the Gemini embedding output always matches the PostgreSQL `vector(768)` schema. The default generation model is `gemini-3.5-flash`, selected because it currently supports the Gemini API Free Tier and structured JSON output.
+The generation and embedding model names are configurable in `.env`. The vector dimension is intentionally fixed at 768 so the Gemini embedding output always matches the PostgreSQL `vector(768)` schema. The default generation model remains `gemini-3.8-flash`; Google currently lists standard input and output as free of charge on the Free Tier, subject to rate limits. Structured JSON output is supported, and deprecated sampling parameters such as `temperature` are intentionally omitted.
 
 Start the optional AI profile:
 
