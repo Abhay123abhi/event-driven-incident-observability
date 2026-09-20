@@ -14,6 +14,8 @@ import java.util.Map;
 @Component
 public class GeminiClient {
 
+    private static final int EMBEDDING_DIMENSIONS = 768;
+
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
     private final AiProperties properties;
@@ -29,14 +31,14 @@ public class GeminiClient {
         String url = "%s/models/%s:embedContent".formatted(properties.baseUrl(), properties.embeddingModel());
         var body = Map.of(
                 "content", Map.of("parts", List.of(Map.of("text", text))),
-                "output_dimensionality", properties.embeddingDimensions());
+                "output_dimensionality", EMBEDDING_DIMENSIONS;
         JsonNode response = restClient.post().uri(url)
                 .header("x-goog-api-key", properties.apiKey())
                 .body(body).retrieve().body(JsonNode.class);
         var values = response.path("embedding").path("values");
         var embedding = new ArrayList<Double>();
         values.forEach(value -> embedding.add(value.asDouble()));
-        if (embedding.size() != properties.embeddingDimensions()) {
+        if (embedding.size() != EMBEDDING_DIMENSIONS) {
             throw new IllegalStateException("Unexpected embedding dimension: " + embedding.size());
         }
         return List.copyOf(embedding);
@@ -60,7 +62,6 @@ public class GeminiClient {
         var body = Map.of(
                 "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
                 "generationConfig", Map.of(
-                        "temperature", 0.1,
                         "responseMimeType", "application/json",
                         "responseJsonSchema", schema));
         JsonNode response = restClient.post().uri(url)
