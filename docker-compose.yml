@@ -29,7 +29,7 @@ x-java-healthcheck: &java-healthcheck
 
 services:
   postgres:
-    image: pgvector/pgvector:0.8.6-pg17
+    image: pgvector/pgvector:0.8.7-pg17
     restart: unless-stopped
     mem_limit: 320m
     logging: *local-logging
@@ -49,7 +49,7 @@ services:
       retries: 12
 
   ai-db-init:
-    image: pgvector/pgvector:0.8.6-pg17
+    image: pgvector/pgvector:0.8.7-pg17
     profiles: [ai]
     restart: "no"
     depends_on:
