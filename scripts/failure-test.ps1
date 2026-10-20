@@ -25,6 +25,10 @@ try {
             if ($Scenario -eq 'latency') { throw }
             if (-not $_.Exception.Response) { throw }
             $status = [int]$_.Exception.Response.StatusCode
+            if ($Scenario -eq 'downstream' -and $status -eq 409) {
+                Write-Host "Observed expected HTTP 409 from the inventory-unavailable fallback"
+                continue
+            }
             if ($status -lt 500) { throw }
             Write-Host "Observed HTTP $status during $Scenario test"
         }
