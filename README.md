@@ -8,34 +8,181 @@ This project **detects service failures, persists incidents reliably, assembles 
 
 **[Quick start](#quick-start) · [Follow the code](#follow-the-code) · [Test a real alert](#test-a-real-failure) · [Failure scenarios](docs/failure-demos.md) · [Operations](docs/operations.md)**
 
-## How it works
+## Architecture
+
+The system separates **business traffic**, **telemetry**, **reliable incident processing**, and **operator views**. These are color-coded GitHub-native Mermaid diagrams, so the architecture stays editable with the code.
+
+### System architecture — components and connections
 
 ```mermaid
-flowchart TD
-    A["Client / failure demo"] --> G["API Gateway"]
-    G --> O["Order Service"]
-    O --> I["Inventory Service"]
-    G -. "HTTP metrics" .-> P["Prometheus"]
-    O -. "HTTP metrics" .-> P
-    I -. "HTTP metrics" .-> P
-    P -->|"alert rules"| AM["Alertmanager"]
-    AM -->|"firing / resolved webhook"| S["Incident Service"]
-    S -->|"incident + outbox, one transaction"| DB[("PostgreSQL")]
-    DB --> PUB["Outbox publisher"]
-    PUB -->|"acknowledged event"| K["Kafka"]
-    K --> W["Investigation worker"]
-    W -->|"query metric evidence"| P
-    W -->|"query error logs"| L["Loki"]
-    W -->|"query recent traces"| T["Tempo"]
-    W -->|"bounded report"| DB
-    DB --> UI["Incident Desk / Grafana"]
+flowchart TB
+    subgraph WORKLOAD["01 · Business workload"]
+        direction LR
+        USER["Developer / test scripts"]
+        GATE["API Gateway + Incident Desk :9000"]
+        ORDER["Order Service :8081"]
+        INV["Inventory Service :8082"]
+        USER --> GATE
+        GATE -->|"HTTP /api/order"| ORDER
+        GATE -->|"HTTP /api/inventory"| INV
+        ORDER -->|"REST stock check"| INV
+    end
+
+    subgraph TELEMETRY["02 · Observability and alerting"]
+        direction LR
+        PROM[("Prometheus :9090 — metrics")]
+        ALERT["Alertmanager :9093"]
+        LOKI[("Loki :3100 — logs")]
+        TEMPO[("Tempo :3200 — traces")]
+        PROM -->|"evaluate alert rules"| ALERT
+    end
+
+    subgraph CORE["03 · Incident Service :8084 — one Java container"]
+        direction LR
+        WEBHOOK["Webhook + fingerprint dedup"]
+        PUB["Scheduled outbox publisher"]
+        WORKER["Kafka investigation consumer"]
+        EVIDENCE["Telemetry collection + deterministic analysis"]
+        RESULT["Persist report + resolution"]
+        API["Paginated incident read API"]
+        WORKER --> EVIDENCE --> RESULT
+    end
+
+    subgraph DURABLE["04 · Durable state and event transport"]
+        direction LR
+        APPDB[("PostgreSQL: order + inventory databases")]
+        INCIDENTDB[("PostgreSQL: incident_platform / incidents + outbox")]
+        KAFKA[("Kafka: investigation + notification topics")]
+    end
+
+    subgraph PRESENTATION["05 · Dashboards and optional delivery"]
+        direction LR
+        GRAFANA["Grafana :3000"]
+        EMAIL["Notification Service :8083 — optional"]
+        SMTP["SMTP provider — optional"]
+        EMAIL -->|"send only if enabled"| SMTP
+    end
+
+    ORDER --> APPDB
+    INV --> APPDB
+    PROM -. "scrape Actuator metrics" .-> GATE
+    PROM -. "scrape Actuator metrics" .-> ORDER
+    PROM -. "scrape Actuator metrics" .-> INV
+    PROM -. "scrape Actuator metrics" .-> WEBHOOK
+    ORDER -. "application logs" .-> LOKI
+    INV -. "application logs" .-> LOKI
+    GATE -. "Zipkin trace spans" .-> TEMPO
+    ORDER -. "Zipkin trace spans" .-> TEMPO
+
+    ALERT -->|"POST firing / resolved webhook"| WEBHOOK
+    WEBHOOK -->|"atomic incident + outbox write"| INCIDENTDB
+    INCIDENTDB -->|"read unpublished events"| PUB
+    PUB -->|"await Kafka ack"| KAFKA
+    KAFKA -->|"investigation event"| WORKER
+    EVIDENCE -. "PromQL queries" .-> PROM
+    EVIDENCE -. "bounded log search" .-> LOKI
+    EVIDENCE -. "trace search" .-> TEMPO
+    RESULT -->|"save bounded report / notification outbox"| INCIDENTDB
+    GATE -->|"GET /api/incidents"| API
+    API -->|"read history"| INCIDENTDB
+    KAFKA -->|"notification events"| EMAIL
+
+    GRAFANA -. "dashboard metrics" .-> PROM
+    GRAFANA -. "log exploration" .-> LOKI
+    GRAFANA -. "trace exploration" .-> TEMPO
+    GRAFANA -. "incident table" .-> INCIDENTDB
+
+    classDef workload fill:#047857,stroke:#065f46,color:#ffffff,stroke-width:2px;
+    classDef telemetry fill:#1d4ed8,stroke:#1e3a8a,color:#ffffff,stroke-width:2px;
+    classDef incident fill:#6d28d9,stroke:#4c1d95,color:#ffffff,stroke-width:2px;
+    classDef database fill:#334155,stroke:#0f172a,color:#ffffff,stroke-width:2px;
+    classDef messaging fill:#b45309,stroke:#78350f,color:#ffffff,stroke-width:2px;
+    classDef dashboard fill:#0e7490,stroke:#155e75,color:#ffffff,stroke-width:2px;
+    classDef optional fill:#9a3412,stroke:#7c2d12,color:#ffffff,stroke-width:2px,stroke-dasharray:5 3;
+
+    class USER,GATE,ORDER,INV workload;
+    class PROM,ALERT,LOKI,TEMPO telemetry;
+    class WEBHOOK,PUB,WORKER,EVIDENCE,RESULT,API incident;
+    class APPDB,INCIDENTDB database;
+    class KAFKA messaging;
+    class GRAFANA dashboard;
+    class EMAIL,SMTP optional;
+
+    style WORKLOAD fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b;
+    style TELEMETRY fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a;
+    style CORE fill:#f5f3ff,stroke:#7c3aed,stroke-width:2px,color:#4c1d95;
+    style DURABLE fill:#f1f5f9,stroke:#475569,stroke-width:2px,color:#0f172a;
+    style PRESENTATION fill:#ecfeff,stroke:#0891b2,stroke-width:2px,color:#164e63;
 ```
 
-- **Metrics:** Actuator/Micrometer expose application metrics; Prometheus scrapes and evaluates latency, HTTP errors, uptime and connection-pool alert rules.
-- **Events:** Alertmanager posts firing and recovery webhooks; the incident API deduplicates active alerts by fingerprint.
-- **Durability:** Incident + outbox event are saved atomically; the publisher retries Kafka delivery until acknowledged.
-- **Investigation:** A Kafka worker queries a limited telemetry window and stores a small, readable report. Partial telemetry outages become report warnings instead of pretending everything is healthy.
-- **Recovery:** Resolved alerts close incidents; completed reports remain accessible. Incident data has explicit retention policies. The platform observes and explains; it does not automatically fix services.
+**Color legend:** 🟩 Green — application workload · 🟦 Blue — telemetry/alerting · 🟪 Purple — incident logic · ⬛ Slate — PostgreSQL · 🟨 Amber — Kafka · 🩵 Cyan — Grafana · 🟧 Dashed orange — optional email. **Solid arrows** show HTTP, events or persistence; **dotted arrows** show telemetry export, scraping or queries.
+
+**Implementation detail:** All six **purple** blocks belong to the *same* `incident-service` Spring Boot container, not six additional microservices. The three logical PostgreSQL databases run on **one PostgreSQL server**.
+
+### Incident lifecycle — reliable processing and recovery
+
+```mermaid
+flowchart LR
+    FIRE["Alertmanager firing webhook"] --> DEDUP{"Active fingerprint exists?"}
+    DEDUP -->|"yes"| EXIST["Return existing incident ID"]
+    DEDUP -->|"no"| WRITE["Commit incident + unpublished outbox in one transaction"]
+    WRITE --> PUBLISH["Outbox publisher sends to Kafka"]
+    PUBLISH --> CONSUMER["Investigation worker"]
+    CONSUMER --> CHECK{"Already investigated?"}
+    CHECK -->|"yes"| SKIP["Ignore duplicate"]
+    CHECK -->|"no"| COLLECT["Query bounded metrics, logs and traces"]
+    COLLECT --> REPORT["Deterministic findings + recommendations"]
+    REPORT --> SAVE["Save report and notification outbox"]
+
+    CONSUMER -. "processing exception" .-> RETRY["Bounded Kafka retries"]
+    RETRY -->|"retries exhausted"| DLT["incident-investigation.DLT"]
+
+    RESOLVE["Alertmanager resolved webhook"] --> CLOSE["Set RESOLVED + enqueue recovery event"]
+    CLOSE --> DB[("PostgreSQL incident history")]
+    SAVE --> DB
+
+    classDef trigger fill:#1d4ed8,stroke:#1e3a8a,color:#fff,stroke-width:2px;
+    classDef decision fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:2px;
+    classDef work fill:#6d28d9,stroke:#4c1d95,color:#fff,stroke-width:2px;
+    classDef stored fill:#334155,stroke:#0f172a,color:#fff,stroke-width:2px;
+    classDef failure fill:#9a3412,stroke:#7c2d12,color:#fff,stroke-width:2px;
+    class FIRE,RESOLVE trigger;
+    class DEDUP,CHECK decision;
+    class EXIST,WRITE,PUBLISH,CONSUMER,SKIP,COLLECT,REPORT,SAVE,CLOSE work;
+    class DB stored;
+    class RETRY,DLT failure;
+```
+
+The firing and resolved webhook paths are independent. If an alert resolves before the Kafka worker finishes, the evidence can still be stored **without reopening the incident**. Events are processed **at least once**, with deduplication of completed investigations. Failed investigations are retried and may be published to a DLT; **replaying DLT messages still requires an operator**.
+
+### Component responsibilities
+
+| Component | What it does | Ownership or configuration |
+| --- | --- | --- |
+| **API Gateway + Incident Desk** | Routes client traffic and serves the incident browser UI | `api-gateway/`, port `9000`; UI is static content |
+| **Order Service** | Demonstrates cross-service REST calls and resilience/fallback | `order-service/`, port `8081` |
+| **Inventory Service** | Instrumented business workload with opt-in failure injection | `inventory-service/`, port `8082` |
+| **Prometheus** | Scrapes metrics and evaluates service/latency/error/DB-pool alert rules | `ops/observability/prometheus/`, port `9090` |
+| **Alertmanager** | Groups alerts and sends firing/resolved webhooks | `ops/observability/alertmanager/`, port `9093` |
+| **Loki** | Stores and searches raw application logs | Port `3100`; incident report keeps only a bounded, redacted excerpt |
+| **Tempo** | Receives traces using its Zipkin-compatible endpoint | Ports `3200` and `9411`; report keeps concise trace summaries |
+| **Incident Service** | Webhook intake, deduplication, transactional outbox, Kafka worker, deterministic analysis, retention and read API | `incident-service/`, port `8084`; **one container** |
+| **PostgreSQL** | Sample order/inventory databases and durable incident state/outbox in `incident_platform` | One server, separate logical databases; no raw telemetry archive |
+| **Kafka** | Asynchronous investigation/notification topics and DLT for exhausted retries | Broker inside Compose network; **not** exactly-once processing |
+| **Grafana** | Visualizes metrics, logs, traces and the incident table | `ops/observability/grafana/`, port `3000` |
+| **Notification Service** | Optionally consumes notifications and sends SMTP email | `notification-service/`, port `8083`, `--profile email` |
+| **Kafka UI** | Optional topic and consumer-group inspection | `--profile tools`, port `8086` |
+
+### Example: an Inventory latency incident
+
+1. **Generate the problem:** The demo script introduces slow Inventory responses while sending requests through the instrumented workload.
+2. **Detect the alert:** Prometheus scrapes metrics every 15 seconds, evaluates rules, and Alertmanager sends a firing webhook after its configured delays.
+3. **Save without losing work:** `IncidentService` commits an incident and an outbox record atomically, while deduplicating active alerts by fingerprint.
+4. **Investigate asynchronously:** The outbox publisher waits for Kafka acknowledgement; the Kafka consumer queries Prometheus, Loki and Tempo over a limited historical window.
+5. **Store an explainable report:** The deterministic investigator stores metrics, bounded log excerpts, trace summaries, evidence gaps and recommendations—not a claimed proof of root cause.
+6. **Observe and recover:** The Incident Desk and Grafana display the report; a later resolved webhook marks the incident recovered. Email is a separate, opt-in consumer.
+
+**Storage boundaries:** Prometheus owns time-series metrics; Loki owns logs; Tempo owns traces. PostgreSQL stores **incident state, concise findings and transactional outbox events**—not duplicate raw telemetry. See [operations and retention](docs/operations.md) for cleanup and production limitations.
 
 ## Repository structure
 
