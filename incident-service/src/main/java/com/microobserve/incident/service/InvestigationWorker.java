@@ -43,7 +43,7 @@ public class InvestigationWorker {
         try {
             var evidence = evidenceService.collect(request.alert());
             var analysis = investigator.investigate(evidence);
-            if (resultService.complete(incident.id(), analysis, evidence)) {
+            if (resultService.complete(incident.id(), analysis)) {
                 meters.counter("incident.investigated", "service", incident.service(), "severity", analysis.severity()).increment();
                 log.info("Completed investigation {} for {}", incident.id(), incident.service());
             }
