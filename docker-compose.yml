@@ -96,7 +96,7 @@ services:
       postgres: { condition: service_healthy }
     healthcheck:
       <<: *java-healthcheck
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8082/actuator/health"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8082/actuator/health"]
 
   order-service:
     <<: *java-service
@@ -116,7 +116,7 @@ services:
       inventory-service: { condition: service_healthy }
     healthcheck:
       <<: *java-healthcheck
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8081/actuator/health"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8081/actuator/health"]
 
   incident-service:
     <<: *java-service
@@ -144,7 +144,7 @@ services:
       postgres: { condition: service_healthy }
     healthcheck:
       <<: *java-healthcheck
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8084/actuator/health"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8084/actuator/health"]
 
   notification-service:
     <<: *java-service
@@ -170,7 +170,7 @@ services:
       broker: { condition: service_healthy }
     healthcheck:
       <<: *java-healthcheck
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8083/actuator/health"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8083/actuator/health"]
 
   api-gateway:
     <<: *java-service
@@ -191,7 +191,7 @@ services:
       incident-service: { condition: service_healthy }
     healthcheck:
       <<: *java-healthcheck
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:9000/actuator/health"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9000/actuator/health"]
 
   prometheus:
     image: prom/prometheus:v3.15.0

@@ -41,11 +41,12 @@ class TelemetryEvidenceServiceTest {
                     Map.of(), null, null, "test");
             var evidence = service.collect(alert);
             assertThat(evidence.metrics()).isEmpty();
+            assertThat(evidence.collectionNotes()).anyMatch(note -> note.startsWith("Metric NO_DATA:"));
             assertThat(evidence.collectionNotes()).anyMatch(note -> note.startsWith("Loki unavailable"));
-            assertThat(requests).hasSize(6);
-            assertThat(requests.subList(0, 4)).allMatch(request -> request.contains("&time="));
-            assertThat(requests.get(4)).contains("&start=", "&end=", "&limit=10");
-            assertThat(requests.get(5)).contains("tags=service.name=inventory-service", "&start=", "&end=");
+            assertThat(requests).hasSize(7);
+            assertThat(requests.subList(0, 5)).allMatch(request -> request.contains("&time="));
+            assertThat(requests.get(5)).contains("&start=", "&end=", "&limit=10");
+            assertThat(requests.get(6)).contains("tags=service.name=inventory-service", "&start=", "&end=");
         } finally {
             server.stop(0);
         }
@@ -71,7 +72,7 @@ class TelemetryEvidenceServiceTest {
             assertThat(result.metrics()).isEmpty();
             assertThat(result.recentErrors()).isEmpty();
             assertThat(result.traceSummaries()).isEmpty();
-            assertThat(result.collectionNotes()).anyMatch(note -> note.startsWith("Metric unavailable:"));
+            assertThat(result.collectionNotes()).anyMatch(note -> note.startsWith("Metric QUERY_FAILED:"));
             assertThat(result.collectionNotes()).anyMatch(note -> note.startsWith("Loki unavailable:"));
             assertThat(result.collectionNotes()).anyMatch(note -> note.startsWith("Tempo unavailable:"));
         } finally {

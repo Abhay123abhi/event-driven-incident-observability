@@ -9,5 +9,7 @@ import java.util.UUID;
 
 public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
     List<OutboxEvent> findTop100ByPublishedAtIsNullOrderByCreatedAt();
+    long countByPublishedAtIsNull();
+    java.util.Optional<OutboxEvent> findFirstByPublishedAtIsNullOrderByCreatedAtAsc();
     long deleteByPublishedAtBefore(Instant cutoff);
 }

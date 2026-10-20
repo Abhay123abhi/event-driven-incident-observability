@@ -96,13 +96,13 @@ async function openDetail() {
             'Awaiting recovery. A completed investigation does not mean the service has recovered.','muted'));
         body.append(node('h3','Recorded lifecycle'));
         const timeline=node('div',null,'timeline');
-        for (const [label,value] of [['Detected',item.detectedAt],['Last updated',item.updatedAt],['Resolved',item.resolvedAt]]) {
+        for (const [label,value] of [['Detected',item.detectedAt],['Investigated',item.investigatedAt],['Last updated',item.updatedAt],['Resolved',item.resolvedAt]]) {
             if (!value) continue;
             const event=node('p',label);event.append(node('small',date(value)));timeline.append(event);
         }
         body.append(timeline,node('p','Only persisted timestamps are shown. Individual queue and worker-stage timestamps are not recorded.','muted'));
         const evidence=item.evidence || [];
-        const notes=evidence.filter(value => /unavailable|could not|no telemetry|collection window/i.test(value));
+        const notes=evidence.filter(value => /unavailable|could not|no telemetry|collection window|no_data|query_failed|startsAt/i.test(value));
         const metrics=evidence.filter(value => /^[a-z_]+=[-+0-9.]/.test(value));
         const traces=evidence.filter(value => value.startsWith('traceId='));
         const other=evidence.filter(value => !notes.includes(value) && !metrics.includes(value) && !traces.includes(value));

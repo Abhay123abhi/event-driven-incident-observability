@@ -48,4 +48,5 @@ public class OutboxEvent {
     public String aggregateId() { return aggregateId; }
     public String topic() { return topic; }
     public String payload() { return payload; }
+    public Instant createdAt() { return createdAt; }
 }

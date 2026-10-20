@@ -28,7 +28,7 @@ incidents; this is not cross-alert incident correlation.
 | --- | --- | --- |
 | Resolved incident and its evidence report | PostgreSQL `incidents`, in `postgres-data` | Eligible for deletion **30 days after `resolved_at`**, not 30 days after creation. The report is stored on the same row and is deleted with it. |
 | Active incident, including completed investigation awaiting recovery | PostgreSQL `incidents` | **No automatic expiry** until the incident becomes `RESOLVED`. `INVESTIGATED` does not mean resolved. |
-| Failed investigation | PostgreSQL `incidents`, status `INVESTIGATION_FAILED` | **No automatic expiry** while unresolved. Its exception is logged; there is no separate durable failed-event/DLQ record. If later resolved, the 30-day resolved retention applies. |
+| Failed investigation | PostgreSQL `incidents`, status `INVESTIGATION_FAILED` | **No automatic expiry** while unresolved. Its exception is logged; failed events can be published to a Kafka .DLT topic after bounded retries (no automatic replay). If later resolved, the 30-day resolved retention applies. |
 | Published investigation or notification outbox event | PostgreSQL `outbox_events`, in `postgres-data` | Eligible for deletion **7 days after `published_at`**. Publication means Kafka acknowledged the send and the application saved that timestamp; it does not confirm investigation completion or email delivery. |
 | Unpublished outbox event | PostgreSQL `outbox_events` | **No automatic expiry or backlog cap**. Kept for publication retries until successfully marked published. |
 | Investigation and notification topic messages | Kafka, in `kafka-data` | Local broker retention is limited to **6 hours** and approximately **128 MB per partition**. PostgreSQL's 7-day outbox policy does not control Kafka. Consumed messages are not immediately deleted. |
@@ -133,8 +133,7 @@ These are proposed improvements, not enabled features:
 2. Monitor disk usage, oldest unpublished outbox age, pending outbox count, Kafka
    consumer lag and investigation duration. Define operational thresholds before
    accepting more load.
-3. Set an intake rate limit and an explicit overload response/retry policy. Add
-   bounded retries, a dead-letter queue and controlled replay for failed work.
+3. Set an intake rate limit and an explicit overload response/retry policy. Keep bounded retries and a dead-letter queue; add controlled replay for failed work.
 4. Define ownership and review/archival rules for unresolved and failed incidents.
    Never silently delete pending investigations just to reduce disk use.
 5. Batch database cleanup and measure query/index performance. Consider time
@@ -170,10 +169,10 @@ see [Prometheus storage guidance](https://prometheus.io/docs/prometheus/latest/s
 - The outbox provides at-least-once publication, not exactly-once delivery. Run one
   incident-service instance with this configuration. Multi-replica claiming and
   durable notification deduplication are not implemented.
-- Investigation errors are stored as `INVESTIGATION_FAILED`. There is no DLQ/replay
+- Investigation errors are stored as `INVESTIGATION_FAILED`. A Kafka DLT exists but operator replay is not automated
   interface yet. Check service logs; after fixing the cause, reset and retrigger the
   demo. Partial telemetry failures remain visible in the report.
-- The collection window ends at worker execution time. Replaying an old alert does
+- The collection window is anchored near alert firing when startsAt is available. Replaying an old alert does
   not reconstruct its historical window. Deployment correlation and richer incident
   lifecycle management are follow-up work.
 
