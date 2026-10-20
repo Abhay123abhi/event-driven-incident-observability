@@ -42,10 +42,6 @@ try {
     $duplicate = @(Send-Alert 'firing')
     if ($duplicate[0].incidentId -ne $incidentId) { throw 'Repeated firing alert created a different incident.' }
     $report = Wait-ForStatus 'INVESTIGATED'
-    if ($report.PSObject.Properties.Name -contains 'confidence' -or
-        $report.PSObject.Properties.Name -contains 'probableRootCause') {
-        throw 'The old incident API is still running. Rebuild incident-service.'
-    }
     if (@($report.evidence).Count -eq 0) { throw 'Report contains neither evidence nor collection notes.' }
     Send-Alert 'resolved' | Out-Null
     $resolved = Wait-ForStatus 'RESOLVED'

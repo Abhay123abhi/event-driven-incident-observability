@@ -6,7 +6,7 @@
 
 This project **detects service failures, persists incidents reliably, assembles a bounded evidence report, and tracks recovery**. It is a local, reproducible demonstration of event-driven incident handling—not a production monitoring replacement.
 
-**[Run locally](#quick-start) · [Test a real alert](#test-a-real-failure) · [Failure scenarios](docs/failure-demos.md) · [Operations and retention](docs/operations.md)**
+**[Quick start](#quick-start) · [Follow the code](#follow-the-code) · [Test a real alert](#test-a-real-failure) · [Failure scenarios](docs/failure-demos.md) · [Operations](docs/operations.md)**
 
 ## How it works
 
@@ -36,6 +36,46 @@ flowchart TD
 - **Durability:** Incident + outbox event are saved atomically; the publisher retries Kafka delivery until acknowledged.
 - **Investigation:** A Kafka worker queries a limited telemetry window and stores a small, readable report. Partial telemetry outages become report warnings instead of pretending everything is healthy.
 - **Recovery:** Resolved alerts close incidents; completed reports remain accessible. Incident data has explicit retention policies. The platform observes and explains; it does not automatically fix services.
+
+## Repository structure
+
+| Path | Responsibility |
+| --- | --- |
+| `api-gateway/` | Routes client requests and serves the Incident Desk UI (no separate frontend container) |
+| `order-service/`, `inventory-service/` | Instrumented sample workload and opt-in failure injection |
+| `incident-service/` | Webhook ingestion, deduplication, transactional outbox, Kafka worker, evidence analysis and report API |
+| `notification-service/` | Optional Kafka consumer and SMTP notification settings |
+| `ops/observability/` | Prometheus alert rules, Alertmanager webhook, Loki, Tempo, Grafana provisioning |
+| `ops/postgres/` | Creates local databases; Flyway migrations are owned by each service |
+| `scripts/` | End-to-end smoke test, deliberate failure scenarios and browser UI checks |
+| `docs/testing.md` | Detailed test steps, SMTP options, test command reference and troubleshooting |
+| `docs/failure-demos.md` | Failure matrix, timings, safe cleanup and recovery behavior |
+| `docs/operations.md` | Data retention, resource limits, deployment assumptions and known reliability gaps |
+| `Dockerfile`, `docker-compose.yml`, `.env.example` | Lightweight Java images, complete local infrastructure, sample non-secret configuration |
+| `pom.xml`, `mvnw*`, `.github/workflows/` | Multi-module Maven build, reproducible wrapper and CI/image publishing |
+
+**No AI dependency exists on this branch.** The default Compose startup includes metrics,
+alerts, logs, traces, databases, Kafka, the incident worker and both UIs.
+Only SMTP delivery and Kafka UI have optional profiles.
+
+## Follow the code
+
+For the **actual incident-handling path**, read these files in order:
+
+1. `incident-service/.../api/IncidentController.java` — receives Alertmanager webhooks; exposes incident read APIs.
+2. `incident-service/.../service/IncidentService.java` — deduplicates fingerprints; atomically saves incident state and enqueues work through `OutboxService`.
+3. `incident-service/.../service/OutboxPublisher.java` — publishes unpublished events to Kafka; only marks them published after a broker acknowledgement.
+4. `incident-service/.../service/InvestigationWorker.java` — receives the Kafka event and coordinates investigation.
+5. `incident-service/.../service/TelemetryEvidenceService.java` — queries Prometheus, Loki and Tempo for a bounded evidence window.
+6. `incident-service/.../service/EvidenceIncidentInvestigator.java` — produces evidence-based findings and recommendations, not a proven root cause.
+7. `incident-service/.../service/InvestigationResultService.java` — persists the report and enqueues optional notification work.
+
+To trace the alert *before* these steps, inspect
+`ops/observability/prometheus/alerts.yml` and
+`ops/observability/alertmanager/alertmanager.yml`.
+For recovery, follow the resolved-webhook path in `IncidentService`.
+Then read `incident-service/src/test/` and run
+[the smoke test](#verify-the-event-driven-pipeline).
 
 ## Quick start
 
@@ -73,7 +113,7 @@ flowchart TD
    | Alertmanager | http://localhost:9093 |
    | Incident API | http://localhost:8084/api/incidents?scope=all |
 
-Ports bind to `127.0.0.1` by default. If local port 5432 is taken, set `POSTGRES_PORT=5433` in `.env`. Do not expose the demo endpoints to the public internet.
+Ports bind to `127.0.0.1` by default. If port 5432 is taken, set `POSTGRES_PORT=5433` in `.env`. For detailed health checks, startup troubleshooting and email configuration, follow [the testing guide](docs/testing.md). Do not expose the demo endpoints publicly.
 
 ## Verify the event-driven pipeline
 
