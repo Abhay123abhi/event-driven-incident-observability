@@ -102,7 +102,7 @@ async function openDetail() {
         }
         body.append(timeline,node('p','Only persisted timestamps are shown. Individual queue and worker-stage timestamps are not recorded.','muted'));
         const evidence=item.evidence || [];
-        const notes=evidence.filter(value => /unavailable|could not|no telemetry|collection window/i.test(value));
+        const notes=evidence.filter(value => /unavailable|could not|no telemetry|collection window|no_data|query_failed|startsAt/i.test(value));
         const metrics=evidence.filter(value => /^[a-z_]+=[-+0-9.]/.test(value));
         const traces=evidence.filter(value => value.startsWith('traceId='));
         const other=evidence.filter(value => !notes.includes(value) && !metrics.includes(value) && !traces.includes(value));
