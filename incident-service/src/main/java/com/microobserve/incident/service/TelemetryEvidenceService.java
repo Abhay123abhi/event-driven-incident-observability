@@ -45,9 +45,9 @@ public class TelemetryEvidenceService {
         String requests = "http_server_requests_seconds_count{job=\"%s\",uri!~\"/actuator/.*\"}".formatted(service);
         String errors = "http_server_requests_seconds_count{job=\"%s\",status=~\"5..\",uri!~\"/actuator/.*\"}".formatted(service);
         queryMetric(metrics, notes, end, "request_rate", "sum(rate(" + requests + "[5m]))");
-        queryMetric(metrics, notes, end, "error_requests_per_second", "(sum(rate(" + errors + "[5m])) or vector(0))");
+        queryMetric(metrics, notes, end, "error_requests_per_second", "(sum(rate(" + errors + "[5m])) or (sum(rate(" + requests + "[5m])) * 0))");
         queryMetric(metrics, notes, end, "error_rate_percent",
-                "100 * (sum(rate(" + errors + "[5m])) or vector(0)) / clamp_min(sum(rate(" + requests + "[5m])), 0.001)");
+                "100 * (sum(rate(" + errors + "[5m])) or (sum(rate(" + requests + "[5m])) * 0)) / clamp_min(sum(rate(" + requests + "[5m])), 0.001)");
         queryMetric(metrics, notes, end, "p95_latency_seconds",
                 "histogram_quantile(0.95,sum by(le)(rate(http_server_requests_seconds_bucket{job=\"%s\",uri!~\"/actuator/.*\"}[5m])))".formatted(service));
         if (!"api-gateway".equals(service) && !"notification-service".equals(service)) {
