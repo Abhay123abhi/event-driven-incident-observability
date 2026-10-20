@@ -30,13 +30,13 @@ flowchart TD
     W -->|"save bounded report"| DB
     DB -->|"incident history"| UI["Incident Desk / Grafana"]
 
-    classDef workload fill:#166534,stroke:#4ade80,color:#ffffff,stroke-width:2px;
-    classDef observability fill:#1d4ed8,stroke:#93c5fd,color:#ffffff,stroke-width:2px;
-    classDef alert fill:#be123c,stroke:#fda4af,color:#ffffff,stroke-width:2px;
-    classDef incident fill:#6d28d9,stroke:#c4b5fd,color:#ffffff,stroke-width:2px;
-    classDef datastore fill:#334155,stroke:#94a3b8,color:#ffffff,stroke-width:2px;
-    classDef messaging fill:#a16207,stroke:#fde68a,color:#ffffff,stroke-width:2px;
-    classDef dashboard fill:#0f766e,stroke:#5eead4,color:#ffffff,stroke-width:2px;
+    classDef workload fill:#15534C,stroke:#6DB9AA,color:#F8FAFC,stroke-width:1.6px;
+    classDef observability fill:#244A70,stroke:#8BB9DF,color:#F8FAFC,stroke-width:1.6px;
+    classDef alert fill:#793E59,stroke:#D9A0B7,color:#F8FAFC,stroke-width:1.6px;
+    classDef incident fill:#514076,stroke:#B3A0D6,color:#F8FAFC,stroke-width:1.6px;
+    classDef datastore fill:#2B3A51,stroke:#A3B5CD,color:#F8FAFC,stroke-width:1.6px;
+    classDef messaging fill:#73552F,stroke:#DFC28A,color:#F8FAFC,stroke-width:1.6px;
+    classDef dashboard fill:#1B626B,stroke:#8DCBD0,color:#F8FAFC,stroke-width:1.6px;
 
     class A,G,O,I workload;
     class P,L,T observability;
