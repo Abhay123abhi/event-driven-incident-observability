@@ -50,6 +50,11 @@ public class OutboxPublisher {
                 event.markPublished();
                 repository.save(event);
                 meters.counter("incident.outbox.published", "topic", event.topic()).increment();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                meters.counter("incident.outbox.failure", "topic", event.topic()).increment();
+                log.warn("Interrupted publishing outbox event {}", event.id(), exception);
+                return;
             } catch (Exception exception) {
                 meters.counter("incident.outbox.failure", "topic", event.topic()).increment();
                 log.warn("Unable to publish outbox event {}: {}", event.id(), exception.getMessage());

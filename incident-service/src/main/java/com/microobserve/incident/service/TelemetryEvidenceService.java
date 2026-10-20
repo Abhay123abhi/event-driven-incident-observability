@@ -38,16 +38,16 @@ public class TelemetryEvidenceService {
         String service = alert.service();
         var metrics = new LinkedHashMap<String, Double>();
         var notes = new ArrayList<String>();
-        Instant end = evidenceTime(alert.startsAt(), notes);
+        Instant end = evidenceTime(alert, notes);
         Instant start = end.minus(Duration.ofMinutes(5));
         notes.add("Telemetry collection window: " + start + " to " + end);
 
         String requests = "http_server_requests_seconds_count{job=\"%s\",uri!~\"/actuator/.*\"}".formatted(service);
         String errors = "http_server_requests_seconds_count{job=\"%s\",status=~\"5..\",uri!~\"/actuator/.*\"}".formatted(service);
         queryMetric(metrics, notes, end, "request_rate", "sum(rate(" + requests + "[5m]))");
-        queryMetric(metrics, notes, end, "error_requests_per_second", "sum(rate(" + errors + "[5m]))");
+        queryMetric(metrics, notes, end, "error_requests_per_second", "(sum(rate(" + errors + "[5m])) or vector(0))");
         queryMetric(metrics, notes, end, "error_rate_percent",
-                "100 * sum(rate(" + errors + "[5m])) / clamp_min(sum(rate(" + requests + "[5m])), 0.001)");
+                "100 * (sum(rate(" + errors + "[5m])) or vector(0)) / clamp_min(sum(rate(" + requests + "[5m])), 0.001)");
         queryMetric(metrics, notes, end, "p95_latency_seconds",
                 "histogram_quantile(0.95,sum by(le)(rate(http_server_requests_seconds_bucket{job=\"%s\",uri!~\"/actuator/.*\"}[5m])))".formatted(service));
         if (!"api-gateway".equals(service) && !"notification-service".equals(service)) {
@@ -59,7 +59,8 @@ public class TelemetryEvidenceService {
                 fetchLogs(service, start, end, notes), fetchTraces(service, start, end, notes), List.copyOf(notes));
     }
 
-    private Instant evidenceTime(String startsAt, List<String> notes) {
+    private Instant evidenceTime(AlertmanagerWebhook.Alert alert, List<String> notes) {
+        String startsAt = alert.startsAt();
         Instant now = Instant.now();
         if (startsAt == null || startsAt.isBlank()) {
             notes.add("Alert startsAt missing; using investigation time.");
@@ -67,7 +68,14 @@ public class TelemetryEvidenceService {
         }
         try {
             Instant alertStart = Instant.parse(startsAt);
-            if (!alertStart.isAfter(now)) return alertStart;
+            if (!alertStart.isAfter(now)) {
+                // Alert rules persist for two minutes (three minutes for ServiceUnavailable).
+                // Query the historical window when the condition first became firing.
+                Duration pending = "ServiceUnavailable".equals(alert.alertName())
+                        ? Duration.ofMinutes(3) : Duration.ofMinutes(2);
+                Instant firingWindow = alertStart.plus(pending);
+                return firingWindow.isAfter(now) ? now : firingWindow;
+            }
             notes.add("Alert startsAt is in the future; using investigation time.");
         } catch (java.time.format.DateTimeParseException exception) {
             notes.add("Alert startsAt invalid; using investigation time.");

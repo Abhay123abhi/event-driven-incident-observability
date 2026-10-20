@@ -96,7 +96,7 @@ async function openDetail() {
             'Awaiting recovery. A completed investigation does not mean the service has recovered.','muted'));
         body.append(node('h3','Recorded lifecycle'));
         const timeline=node('div',null,'timeline');
-        for (const [label,value] of [['Detected',item.detectedAt],['Last updated',item.updatedAt],['Resolved',item.resolvedAt]]) {
+        for (const [label,value] of [['Detected',item.detectedAt],['Investigated',item.investigatedAt],['Last updated',item.updatedAt],['Resolved',item.resolvedAt]]) {
             if (!value) continue;
             const event=node('p',label);event.append(node('small',date(value)));timeline.append(event);
         }
