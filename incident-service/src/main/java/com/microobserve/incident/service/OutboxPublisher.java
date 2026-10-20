@@ -2,6 +2,9 @@ package com.microobserve.incident.service;
 
 import com.microobserve.incident.repository.OutboxRepository;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Gauge;
+import java.time.Duration;
+import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -27,6 +30,14 @@ public class OutboxPublisher {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.meters = meters;
+        Gauge.builder("incident.outbox.pending", repository, OutboxRepository::countByPublishedAtIsNull)
+                .description("Unpublished transactional outbox events").register(meters);
+        Gauge.builder("incident.outbox.oldest.pending.seconds", repository,
+                repo -> repo.findFirstByPublishedAtIsNullOrderByCreatedAtAsc()
+                        .map(event -> (double) Math.max(0,
+                                Duration.between(event.createdAt(), Instant.now()).toSeconds()))
+                        .orElse(0.0))
+                .description("Age in seconds of the oldest unpublished event").register(meters);
     }
 
     @Scheduled(fixedDelayString = "${incident.outbox-delay:1s}")

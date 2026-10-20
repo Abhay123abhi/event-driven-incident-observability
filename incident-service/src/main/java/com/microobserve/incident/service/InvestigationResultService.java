@@ -27,10 +27,14 @@ public class InvestigationResultService {
         var incident = repository.findById(incidentId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown incident " + incidentId));
         if (incident.investigationFinished()) return false;
+        boolean wasResolved = incident.status() == com.microobserve.incident.model.IncidentStatus.RESOLVED;
         incident.complete(analysis);
         repository.save(incident);
-        outbox.enqueue(incident.id(), properties.notificationTopic(),
-                IncidentService.toEvent(incident, properties.grafanaUrl().toString()));
+        // A resolved webhook has already queued a recovery email; do not send a second one.
+        if (!wasResolved) {
+            outbox.enqueue(incident.id(), properties.notificationTopic(),
+                    IncidentService.toEvent(incident, properties.grafanaUrl().toString()));
+        }
         if (properties.aiEnabled()) {
             outbox.enqueue(incident.id(), properties.aiInvestigationTopic(),
                     AiInvestigationRequested.from(incident.id(), evidence));

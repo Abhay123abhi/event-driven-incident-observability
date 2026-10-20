@@ -26,8 +26,11 @@ class IncidentRecordTest {
         incident.startInvestigation();
         incident.resolve();
         assertThat(incident.status()).isEqualTo(IncidentStatus.RESOLVED);
+        assertThat(incident.investigationFinished()).isTrue();
         assertThat(incident.resolvedAt()).isEqualTo(resolvedAt);
-        assertThat(incident.title()).isEqualTo("HighErrorRate detected in order-service");
+        assertThat(incident.title()).isEqualTo("Late result");
+        assertThat(incident.investigatedAt()).isNotNull();
+        assertThat(incident.evidence()).contains("error_requests_per_second=2");
     }
 
     @Test

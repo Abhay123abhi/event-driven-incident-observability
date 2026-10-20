@@ -16,7 +16,7 @@ import static org.mockito.Mockito.*;
 
 class InvestigationResultServiceTest {
     @Test
-    void lateCompletionDoesNotQueueAnotherNotification() {
+    void lateCompletionPersistsEvidenceWithoutAnotherNotification() {
         var repository = mock(IncidentRepository.class);
         var outbox = mock(OutboxService.class);
         var incident = new IncidentRecord("id", "fingerprint", "order-service", "HighErrorRate", "CRITICAL", Instant.now());
@@ -26,7 +26,10 @@ class InvestigationResultServiceTest {
         var evidence = new IncidentEvidence("order-service", "HighErrorRate", "CRITICAL",
                 Map.of(), List.of(), List.of(), List.of());
         service.complete("id", new IncidentAnalysis("Late report", "critical", List.of(), List.of(), List.of()), evidence);
-        verify(repository, never()).save(any());
+        verify(repository).save(incident);
+        org.assertj.core.api.Assertions.assertThat(incident.status())
+                .isEqualTo(com.microobserve.incident.model.IncidentStatus.RESOLVED);
+        org.assertj.core.api.Assertions.assertThat(incident.investigationFinished()).isTrue();
         verifyNoInteractions(outbox);
     }
 }

@@ -48,11 +48,20 @@ public class InvestigationWorker {
                 log.info("Completed investigation {} for {}", incident.id(), incident.service());
             }
         } catch (RuntimeException exception) {
-            resultService.fail(incident.id());
+            try {
+                resultService.fail(incident.id());
+            } catch (RuntimeException persistenceFailure) {
+                exception.addSuppressed(persistenceFailure);
+            }
             meters.counter("incident.investigation.failure", "service", incident.service()).increment();
-            log.error("Investigation {} failed", incident.id(), exception);
+            log.error("Investigation {} failed; Kafka retry/DLT will handle the event", incident.id(), exception);
+            throw exception;
         } finally {
-            timer.stop(meters.timer("incident.investigation.duration", "service", incident.service()));
+            timer.stop(Timer.builder("incident.investigation.duration")
+                    .description("Time spent collecting and persisting incident evidence")
+                    .tag("service", incident.service())
+                    .publishPercentileHistogram()
+                    .register(meters));
         }
     }
 }
