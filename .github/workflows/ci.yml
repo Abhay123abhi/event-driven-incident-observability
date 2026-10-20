@@ -39,13 +39,6 @@ jobs:
           docker compose --profile tools --profile email --profile ai config --quiet
           docker compose --profile tools --profile email --profile ai config --format json | python -c 'import json, sys; services = json.load(sys.stdin)["services"]; names = ("inventory-service", "order-service", "incident-service", "notification-service", "ai-investigation-service", "api-gateway"); required = ("interval", "timeout", "retries", "start_period"); missing = {name: [key for key in required if key not in services[name]["healthcheck"]] for name in names}; assert not any(missing.values()), f"Missing Java health-check settings: {missing}"'
 
-      - name: Validate lightweight Compose overlay
-        run: |
-          export POSTGRES_PASSWORD="ci-local-placeholder"
-          export GRAFANA_ADMIN_PASSWORD="ci-local-placeholder"
-          docker compose -f docker-compose.yml -f docker-compose.lite.yml config --quiet
-          docker compose -f docker-compose.yml -f docker-compose.lite.yml config --format json | python -c 'import json,sys; data=json.load(sys.stdin)["services"]; assert all("full" in data[s].get("profiles",[]) for s in ("loki","tempo","tempo-init","grafana")); assert data["incident-service"]["environment"]["MANAGEMENT_TRACING_ENABLED"]=="false"'
-
       - name: Build incident application container
         run: docker build --build-arg SERVICE=incident-service --tag observe-incident:ci .
 

@@ -42,33 +42,27 @@ running out of memory, close other applications and check `docker stats`; the fu
 observability stack has approximately 3 GB of configured container memory without
 those optional services, so allocate at least 4 GB to Docker.
 
-## Lightweight local mode (recommended on an 8 GB laptop)
+## Full-stack local development, optimized for lower overhead
 
-The normal Compose stack runs the complete metrics, alerts, logs, traces and Grafana pipeline.
-For lower Docker RAM and fewer large downloads, use the optional lightweight overlay instead:
+**All services stay enabled:** PostgreSQL, Kafka, Gateway, Order, Inventory,
+Incident Service, Prometheus, Alertmanager, Loki, Tempo and Grafana. Optional
+AI and email profiles can be enabled for their use cases as before.
+
+The runtime Java images use a small Alpine JRE, Spring Boot dependency layers and
+built-in BusyBox health checks. These changes reduce repeated image transfer and
+build overhead without disabling metrics, logs, tracing, incident analysis or Grafana.
 
 ```powershell
-docker compose -f docker-compose.yml -f docker-compose.lite.yml config --quiet
-docker compose -f docker-compose.yml -f docker-compose.lite.yml up --build -d --remove-orphans
-docker compose -f docker-compose.yml -f docker-compose.lite.yml ps
+docker compose config --quiet
+docker compose up --build -d --remove-orphans
+docker compose ps
+docker stats --no-stream
 ```
 
-The lightweight stack retains PostgreSQL, Kafka, Gateway, Order, Inventory, Incident Service,
-Prometheus and Alertmanager. It omits **Loki, Tempo and Grafana** (three heavier containers)
-and disables their logging/tracing exporters on the Java applications.
-**Metrics alerting and incident reports still work**, but report logs/traces are marked
-unavailable; Grafana dashboards and distributed trace exploration require full mode.
-Use the Incident Desk on **http://localhost:9000** and Prometheus on **http://localhost:9090**.
-
-To switch back to the full stack, run `docker compose up -d --build --remove-orphans`.
-Docker named volumes are retained in either mode; **do not use `down -v`** unless
-you intend to delete local incident and Kafka history.
-
-Images use an Alpine Java 25 JRE, layered Spring Boot dependencies and BusyBox `wget`
-health checks (without installing `curl` in every runtime image).
-This primarily reduces image downloads and repeated dependency layers, while the
-lightweight overlay reduces running services. First builds still require a JDK/Maven
-builder and can need several GB of free disk and Docker memory.
+Running every container still requires sufficient RAM. Docker memory limits are
+upper bounds, not guaranteed usage; inspect `docker stats` to find actual hotspots.
+Keep the existing bounded telemetry retention, and do not run
+`docker compose down -v` unless you intend to delete local data.
 
 ## Retest the incident flow
 
