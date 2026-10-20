@@ -240,7 +240,7 @@ services:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost:9000/actuator/health"]
 
   prometheus:
-    image: prom/prometheus:v3.14.0
+    image: prom/prometheus:v3.15.0
     restart: unless-stopped
     mem_limit: 256m
     logging: *local-logging
@@ -269,7 +269,7 @@ services:
     networks: [backend]
 
   loki:
-    image: grafana/loki:3.7.7
+    image: grafana/loki:3.7.8
     restart: unless-stopped
     mem_limit: 256m
     logging: *local-logging
@@ -306,7 +306,7 @@ services:
     networks: [backend]
 
   grafana:
-    image: grafana/grafana:12.4.11
+    image: grafana/grafana:12.4.12
     restart: unless-stopped
     mem_limit: 256m
     logging: *local-logging
