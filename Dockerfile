@@ -12,8 +12,12 @@ ARG SERVICE
 RUN --mount=type=cache,target=/root/.m2 \
     sed -i 's/\r$//' ./mvnw && \
     test -n "$SERVICE" && \
-    sh ./mvnw --batch-mode --no-transfer-progress \
-      -pl "$SERVICE" -am -DskipTests package && \
+    for attempt in 1 2 3; do \
+      sh ./mvnw --batch-mode --no-transfer-progress \
+        -pl "$SERVICE" -am -DskipTests package && break; \
+      if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+      sleep 3; \
+    done && \
     cp "$SERVICE"/target/*.jar /tmp/application.jar && \
     java -Djarmode=tools -jar /tmp/application.jar extract --layers --destination /tmp/layers
 
