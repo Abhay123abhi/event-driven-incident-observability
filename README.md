@@ -10,87 +10,15 @@ This project **detects service failures, persists incidents reliably, assembles 
 
 ## Architecture
 
-The architecture is divided into **two small diagrams** instead of one crowded chart. The colored boxes distinguish business services, monitoring, incident processing, durable infrastructure and dashboards.
+The system is organized into **four stages**: business traffic, monitoring and alerting, reliable incident processing, and evidence/reporting.
 
-### 1. System overview — how an incident is detected and processed
+![Color-coded architecture showing the business APIs, observability stack, incident-service transactional outbox and Kafka pipeline, and incident reporting](docs/images/system-architecture.svg)
 
-```mermaid
-flowchart TB
-    subgraph APP["1 · Business APIs"]
-        direction LR
-        CLIENT["Developer / test scripts"] --> GATE["API Gateway :9000"]
-        GATE --> ORDER["Order :8081"]
-        ORDER --> INVENTORY["Inventory :8082"]
-    end
+[Open the architecture diagram at full size](docs/images/system-architecture.svg)
 
-    subgraph OBS["2 · Monitoring and alerts"]
-        direction LR
-        PROM["Prometheus :9090"] --> ALERT["Alertmanager :9093"]
-    end
+**How to read it:** Applications expose metrics to Prometheus, which evaluates alert rules and passes firing/resolved alerts to Alertmanager. Alertmanager calls the Incident Service webhook. The Incident Service atomically saves incident state and an outbox event in PostgreSQL, publishes the work to Kafka, and its investigation worker queries Prometheus, Loki, and Tempo to build a bounded evidence report. Operators use the Incident Desk and Grafana to inspect and follow resolution.
 
-    subgraph CORE["3 · Durable event handling"]
-        direction LR
-        INTAKE["Webhook + dedup :8084"] --> DB[("PostgreSQL<br/>incident + outbox")]
-        DB --> PUBLISH["Outbox publisher"]
-        PUBLISH --> KAFKA[("Kafka")]
-    end
-
-    subgraph RESULTS["4 · Investigation and results"]
-        direction LR
-        WORKER["Investigation worker :8084"] --> REPORT["Evidence report"]
-        REPORT --> UI["Incident Desk / Grafana"]
-    end
-
-    INVENTORY -. "HTTP metrics" .-> PROM
-    ALERT -->|"firing / resolved webhook"| INTAKE
-    KAFKA -->|"investigation event"| WORKER
-
-    classDef business fill:#047857,stroke:#065f46,color:#fff,stroke-width:2px;
-    classDef monitoring fill:#1d4ed8,stroke:#1e40af,color:#fff,stroke-width:2px;
-    classDef incident fill:#6d28d9,stroke:#4c1d95,color:#fff,stroke-width:2px;
-    classDef storage fill:#334155,stroke:#0f172a,color:#fff,stroke-width:2px;
-    classDef kafka fill:#b45309,stroke:#92400e,color:#fff,stroke-width:2px;
-    classDef dashboard fill:#0e7490,stroke:#155e75,color:#fff,stroke-width:2px;
-
-    class CLIENT,GATE,ORDER,INVENTORY business;
-    class PROM,ALERT monitoring;
-    class INTAKE,PUBLISH,WORKER,REPORT incident;
-    class DB storage;
-    class KAFKA kafka;
-    class UI dashboard;
-```
-
-**Read from top to bottom.** Prometheus also scrapes the Gateway, Order, and Incident services; only one metrics connection is drawn to keep the diagram readable. The `incident-service` hosts **webhook intake, outbox publication, investigation, and report APIs inside one Java container**.
-
-### 2. Where the investigation collects evidence
-
-```mermaid
-flowchart LR
-    APPS["Gateway / Order / Inventory"] -->|"metrics"| PROM["Prometheus"]
-    APPS -->|"logs"| LOKI["Loki"]
-    APPS -->|"traces"| TEMPO["Tempo"]
-
-    PROM --> COLLECT["Incident evidence collector"]
-    LOKI --> COLLECT
-    TEMPO --> COLLECT
-    COLLECT --> SUMMARY["Bounded deterministic report"]
-    SUMMARY --> DB[("PostgreSQL")]
-
-    classDef business fill:#047857,stroke:#065f46,color:#fff,stroke-width:2px;
-    classDef monitoring fill:#1d4ed8,stroke:#1e40af,color:#fff,stroke-width:2px;
-    classDef incident fill:#6d28d9,stroke:#4c1d95,color:#fff,stroke-width:2px;
-    classDef storage fill:#334155,stroke:#0f172a,color:#fff,stroke-width:2px;
-    class APPS business;
-    class PROM,LOKI,TEMPO monitoring;
-    class COLLECT,SUMMARY incident;
-    class DB storage;
-```
-
-**Colors:** 🟩 Business workload · 🟦 Metrics/logs/traces and alerting · 🟪 Incident processing · ⬛ PostgreSQL · 🟧 Kafka · 🩵 Dashboards.
-
-**How the components cooperate:** Alertmanager forwards firing/resolved webhooks to the Incident Service. The service saves an incident and outbox event in **one transaction**, then publishes investigation work to Kafka. Its worker reads bounded evidence from Prometheus, Loki and Tempo, saves a deterministic report, and optionally queues a notification. The Incident Desk and Grafana expose the result. Kafka errors have bounded retries and a dead-letter topic; dead-letter replay is manual.
-
-**Storage boundaries:** Prometheus stores metrics; Loki stores logs; Tempo stores traces. PostgreSQL stores incident state, concise reports, and transactional outbox records—not a second raw-telemetry archive. Order and Inventory use separate logical databases on the **same PostgreSQL container**. Email delivery and Kafka UI remain optional; **AI is not part of this core branch**.
+**Deployment boundary:** Webhook intake, outbox publisher, Kafka consumer and report persistence all run inside **one** `incident-service` container. PostgreSQL has separate logical databases for business data and incidents. The optional email service is outside the default Compose profile; the AI/RAG work remains on a separate branch.
 
 ### Component responsibilities
 
