@@ -50,4 +50,32 @@ class TelemetryEvidenceServiceTest {
             server.stop(0);
         }
     }
+
+    @Test
+    void unavailablePrometheusAndTempoProduceCollectionWarnings() throws Exception {
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(503, body.length);
+            try (var output = exchange.getResponseBody()) { output.write(body); }
+        });
+        server.start();
+        try {
+            var uri = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
+            var properties = new IncidentProperties(uri, uri, uri, uri,
+                    "investigation", "notification", 10, 100, 30, 7);
+            var alert = new AlertmanagerWebhook.Alert("firing",
+                    Map.of("service", "inventory-service", "alertname", "HighErrorRate"),
+                    Map.of(), null, null, "test");
+            var result = new TelemetryEvidenceService(RestClient.builder(), properties).collect(alert);
+            assertThat(result.metrics()).isEmpty();
+            assertThat(result.recentErrors()).isEmpty();
+            assertThat(result.traceSummaries()).isEmpty();
+            assertThat(result.collectionNotes()).anyMatch(note -> note.startsWith("Metric unavailable:"));
+            assertThat(result.collectionNotes()).anyMatch(note -> note.startsWith("Loki unavailable:"));
+            assertThat(result.collectionNotes()).anyMatch(note -> note.startsWith("Tempo unavailable:"));
+        } finally {
+            server.stop(0);
+        }
+    }
 }
