@@ -12,23 +12,39 @@ This project **detects service failures, persists incidents reliably, assembles 
 
 ```mermaid
 flowchart TD
-    A["Client / failure demo"] --> G["API Gateway"]
-    G --> O["Order Service"]
-    O --> I["Inventory Service"]
-    G -. "HTTP metrics" .-> P["Prometheus"]
-    O -. "HTTP metrics" .-> P
-    I -. "HTTP metrics" .-> P
-    P -->|"alert rules"| AM["Alertmanager"]
-    AM -->|"firing / resolved webhook"| S["Incident Service"]
-    S -->|"incident + outbox, one transaction"| DB[("PostgreSQL")]
-    DB --> PUB["Outbox publisher"]
-    PUB -->|"acknowledged event"| K["Kafka"]
-    K --> W["Investigation worker"]
-    W -->|"query metric evidence"| P
-    W -->|"query error logs"| L["Loki"]
-    W -->|"query recent traces"| T["Tempo"]
-    W -->|"bounded report"| DB
-    DB --> UI["Incident Desk / Grafana"]
+    A["Client / Failure Demo"] --> G["API Gateway :9000"]
+    G --> O["Order Service :8081"]
+    O --> I["Inventory Service :8082"]
+    G -. "metrics" .-> P["Prometheus<br/>Metrics + Alert Rules"]
+    O -. "metrics" .-> P
+    I -. "metrics" .-> P
+    P -->|"rule fires"| AM["Alertmanager<br/>Firing / Resolved"]
+    AM -->|"webhook"| S["Incident Service :8084<br/>Receive + Deduplicate"]
+    S -->|"atomic incident + outbox"| DB[("PostgreSQL<br/>Incident + Outbox")]
+    DB -->|"unpublished events"| PUB["Outbox Publisher"]
+    PUB -->|"broker acknowledgement"| K[("Kafka<br/>Investigation Events")]
+    K --> W["Investigation Worker<br/>Evidence + Findings"]
+    W -. "metrics query" .-> P
+    W -. "log search" .-> L["Loki<br/>Logs"]
+    W -. "trace search" .-> T["Tempo<br/>Traces"]
+    W -->|"save bounded report"| DB
+    DB -->|"incident history"| UI["Incident Desk / Grafana"]
+
+    classDef workload fill:#166534,stroke:#4ade80,color:#ffffff,stroke-width:2px;
+    classDef observability fill:#1d4ed8,stroke:#93c5fd,color:#ffffff,stroke-width:2px;
+    classDef alert fill:#be123c,stroke:#fda4af,color:#ffffff,stroke-width:2px;
+    classDef incident fill:#6d28d9,stroke:#c4b5fd,color:#ffffff,stroke-width:2px;
+    classDef datastore fill:#334155,stroke:#94a3b8,color:#ffffff,stroke-width:2px;
+    classDef messaging fill:#a16207,stroke:#fde68a,color:#ffffff,stroke-width:2px;
+    classDef dashboard fill:#0f766e,stroke:#5eead4,color:#ffffff,stroke-width:2px;
+
+    class A,G,O,I workload;
+    class P,L,T observability;
+    class AM alert;
+    class S,PUB,W incident;
+    class DB datastore;
+    class K messaging;
+    class UI dashboard;
 ```
 
 - **Metrics:** Actuator/Micrometer expose application metrics; Prometheus scrapes and evaluates latency, HTTP errors, uptime and connection-pool alert rules.
