@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1075" viewBox="0 0 1600 1075" role="img" aria-labelledby="title desc">
+<title id="title">Event-Driven Incident Observability — system architecture</title><desc id="desc">A four-stage overview of API traffic, observability and alerting, a transactional outbox and Kafka incident pipeline, and evidence collection with dashboards. AI is not part of the system.</desc>
+<defs><marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"/></marker></defs>
+<rect x="0" y="0" width="1600" height="1075" rx="0" fill="#F8FAFC" stroke="none" stroke-width="0"/>
+<rect x="42" y="24" width="1516" height="109" rx="21" fill="#0B2447" stroke="#0B2447" stroke-width="0"/>
+<text x="78" y="78" font-size="37" font-family="Arial, Helvetica, sans-serif" fill="#FFFFFF" font-weight="800" text-anchor="start">EVENT-DRIVEN INCIDENT OBSERVABILITY</text>
+<text x="80" y="109" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#C7DBF9" font-weight="400" text-anchor="start">Reliable failure detection • durable events • evidence-based investigations</text>
+<rect x="42" y="154" width="1516" height="176" rx="22" fill="#EBFDF4" stroke="#159969" stroke-width="2"/>
+<rect x="61" y="172" width="43" height="43" rx="12" fill="#159969" stroke="#159969" stroke-width="1"/>
+<text x="82" y="202" font-size="26" font-family="Arial, Helvetica, sans-serif" fill="#fff" font-weight="800" text-anchor="middle">1</text>
+<text x="122" y="202" font-size="29" font-family="Arial, Helvetica, sans-serif" fill="#0F172A" font-weight="800" text-anchor="start">Business requests</text>
+<text x="1512" y="202" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#64748b" font-weight="500" text-anchor="end">Application workload</text>
+<rect x="83" y="232" width="293" height="79" rx="13" fill="#FFFFFF" stroke="#86E7B4" stroke-width="2"/>
+<text x="103" y="268" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Developer / test scripts</text>
+<text x="103" y="302" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">HTTP requests</text>
+<rect x="446" y="232" width="293" height="79" rx="13" fill="#FFFFFF" stroke="#86E7B4" stroke-width="2"/>
+<text x="466" y="268" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">API Gateway :9000</text>
+<text x="466" y="302" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Request routing + UI</text>
+<rect x="810" y="232" width="293" height="79" rx="13" fill="#FFFFFF" stroke="#86E7B4" stroke-width="2"/>
+<text x="830" y="268" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Order Service :8081</text>
+<text x="830" y="302" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Business API</text>
+<rect x="1174" y="232" width="324" height="79" rx="13" fill="#FFFFFF" stroke="#86E7B4" stroke-width="2"/>
+<text x="1194" y="268" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Inventory Service :8082</text>
+<text x="1194" y="302" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Downstream + fault injection</text>
+<path d="M386 272 L430 272" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<path d="M749 272 L794 272" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<path d="M1113 272 L1159 272" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<rect x="42" y="350" width="1516" height="178" rx="22" fill="#EAF4FF" stroke="#2563EB" stroke-width="2"/>
+<rect x="61" y="368" width="43" height="43" rx="12" fill="#2563EB" stroke="#2563EB" stroke-width="1"/>
+<text x="82" y="398" font-size="26" font-family="Arial, Helvetica, sans-serif" fill="#fff" font-weight="800" text-anchor="middle">2</text>
+<text x="122" y="398" font-size="29" font-family="Arial, Helvetica, sans-serif" fill="#0F172A" font-weight="800" text-anchor="start">Monitoring and alerting</text>
+<text x="1512" y="398" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#64748b" font-weight="500" text-anchor="end">Metrics • logs • traces</text>
+<rect x="83" y="428" width="293" height="80" rx="13" fill="#FFFFFF" stroke="#93C5FD" stroke-width="2"/>
+<text x="103" y="464" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Prometheus :9090</text>
+<text x="103" y="498" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Metrics + alert rules</text>
+<rect x="446" y="428" width="293" height="80" rx="13" fill="#FFFFFF" stroke="#93C5FD" stroke-width="2"/>
+<text x="466" y="464" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Alertmanager :9093</text>
+<text x="466" y="498" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Firing / resolved webhooks</text>
+<rect x="810" y="428" width="293" height="80" rx="13" fill="#FFFFFF" stroke="#93C5FD" stroke-width="2"/>
+<text x="830" y="464" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Loki :3100</text>
+<text x="830" y="498" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Application logs</text>
+<rect x="1174" y="428" width="324" height="80" rx="13" fill="#FFFFFF" stroke="#93C5FD" stroke-width="2"/>
+<text x="1194" y="464" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Tempo :3200</text>
+<text x="1194" y="498" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Distributed traces</text>
+<path d="M386 469 L430 469" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<rect x="42" y="550" width="1516" height="226" rx="22" fill="#F4EDFF" stroke="#7C3AED" stroke-width="2"/>
+<rect x="61" y="568" width="43" height="43" rx="12" fill="#7C3AED" stroke="#7C3AED" stroke-width="1"/>
+<text x="82" y="598" font-size="26" font-family="Arial, Helvetica, sans-serif" fill="#fff" font-weight="800" text-anchor="middle">3</text>
+<text x="122" y="598" font-size="29" font-family="Arial, Helvetica, sans-serif" fill="#0F172A" font-weight="800" text-anchor="start">Incident processing pipeline</text>
+<text x="1512" y="598" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#64748b" font-weight="500" text-anchor="end">Webhook + publisher + worker: one Java service :8084</text>
+<rect x="68" y="653" width="228" height="92" rx="13" fill="#FFFFFF" stroke="#C4B5FD" stroke-width="2"/>
+<text x="88" y="689" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Webhook receiver</text>
+<text x="88" y="723" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Dedup fingerprints</text>
+<rect x="357" y="653" width="228" height="92" rx="13" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<text x="377" y="689" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">PostgreSQL</text>
+<text x="377" y="723" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Incident + outbox</text>
+<rect x="646" y="653" width="228" height="92" rx="13" fill="#FFFFFF" stroke="#C4B5FD" stroke-width="2"/>
+<text x="666" y="689" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Outbox publisher</text>
+<text x="666" y="723" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Ack before marking</text>
+<rect x="935" y="653" width="228" height="92" rx="13" fill="#FFF9E8" stroke="#F59E0B" stroke-width="2"/>
+<text x="955" y="689" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Kafka broker</text>
+<text x="955" y="723" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Investigation events</text>
+<rect x="1224" y="653" width="309" height="92" rx="13" fill="#FFFFFF" stroke="#C4B5FD" stroke-width="2"/>
+<text x="1244" y="689" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Investigation worker</text>
+<text x="1244" y="723" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Consumes + processes</text>
+<path d="M309 701 L344 701" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<path d="M598 701 L632 701" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<path d="M887 701 L920 701" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<path d="M1176 701 L1210 701" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<text x="89" y="635" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#6D28D9" font-weight="600" text-anchor="start">1. Alertmanager webhook</text>
+<text x="358" y="635" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#6D28D9" font-weight="600" text-anchor="start">2. Atomic DB transaction</text>
+<text x="646" y="635" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#6D28D9" font-weight="600" text-anchor="start">3. Scheduled publish</text>
+<text x="947" y="635" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#6D28D9" font-weight="600" text-anchor="start">4. Durable queue</text>
+<text x="1224" y="635" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#6D28D9" font-weight="600" text-anchor="start">5. Async processing</text>
+<rect x="42" y="798" width="1516" height="187" rx="22" fill="#E9FAFD" stroke="#0891B2" stroke-width="2"/>
+<rect x="61" y="816" width="43" height="43" rx="12" fill="#0891B2" stroke="#0891B2" stroke-width="1"/>
+<text x="82" y="846" font-size="26" font-family="Arial, Helvetica, sans-serif" fill="#fff" font-weight="800" text-anchor="middle">4</text>
+<text x="122" y="846" font-size="29" font-family="Arial, Helvetica, sans-serif" fill="#0F172A" font-weight="800" text-anchor="start">Evidence, report and dashboards</text>
+<text x="1512" y="846" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#64748b" font-weight="500" text-anchor="end">No AI dependency</text>
+<rect x="83" y="879" width="328" height="82" rx="13" fill="#FFFFFF" stroke="#8BDCE8" stroke-width="2"/>
+<text x="103" y="915" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Prometheus + Loki + Tempo</text>
+<text x="103" y="949" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Bounded telemetry queries</text>
+<rect x="460" y="879" width="326" height="82" rx="13" fill="#FFFFFF" stroke="#8BDCE8" stroke-width="2"/>
+<text x="480" y="915" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Evidence analysis</text>
+<text x="480" y="949" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Deterministic findings</text>
+<rect x="836" y="879" width="326" height="82" rx="13" fill="#FFFFFF" stroke="#8BDCE8" stroke-width="2"/>
+<text x="856" y="915" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">PostgreSQL report</text>
+<text x="856" y="949" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Concise incident history</text>
+<rect x="1213" y="879" width="286" height="82" rx="13" fill="#FFFFFF" stroke="#8BDCE8" stroke-width="2"/>
+<text x="1233" y="915" font-size="25" font-family="Arial, Helvetica, sans-serif" fill="#0f172a" font-weight="700" text-anchor="start">Incident Desk / Grafana</text>
+<text x="1233" y="949" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#475569" font-weight="400" text-anchor="start">Inspect + recover</text>
+<path d="M424 920 L445 920" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<path d="M799 920 L821 920" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<path d="M1175 920 L1197 920" fill="none" stroke="#64748b" stroke-width="4"  marker-end="url(#arr)"/>
+<text x="50" y="1027" font-size="23" font-family="Arial, Helvetica, sans-serif" fill="#334155" font-weight="700" text-anchor="start">CORE FLOW: API traffic → metrics → alert → transactional outbox → Kafka → investigation → report</text>
+<text x="50" y="1053" font-size="17" font-family="Arial, Helvetica, sans-serif" fill="#64748B" font-weight="400" text-anchor="start">Solid arrows: request/event flow    |    Optional: email notifications and Kafka UI    |    Raw metrics/logs/traces are not stored in PostgreSQL</text>
+</svg>
