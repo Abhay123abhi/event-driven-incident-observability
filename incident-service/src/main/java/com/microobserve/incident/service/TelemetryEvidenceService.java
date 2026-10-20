@@ -37,18 +37,50 @@ public class TelemetryEvidenceService {
     public IncidentEvidence collect(AlertmanagerWebhook.Alert alert) {
         String service = alert.service();
         var metrics = new LinkedHashMap<String, Double>();
-        Instant end = Instant.now();
-        Instant start = end.minus(Duration.ofMinutes(5));
         var notes = new ArrayList<String>();
+        Instant end = evidenceTime(alert, notes);
+        Instant start = end.minus(Duration.ofMinutes(5));
         notes.add("Telemetry collection window: " + start + " to " + end);
 
-        queryMetric(metrics, notes, end, "request_rate", "sum(rate(http_server_requests_seconds_count{job=\"%s\"}[5m]))".formatted(service));
-        queryMetric(metrics, notes, end, "error_requests_per_second", "sum(rate(http_server_requests_seconds_count{job=\"%s\",status=~\"5..\"}[5m]))".formatted(service));
-        queryMetric(metrics, notes, end, "p95_latency_seconds", "histogram_quantile(0.95,sum by(le)(rate(http_server_requests_seconds_bucket{job=\"%s\"}[5m])))".formatted(service));
-        queryMetric(metrics, notes, end, "active_db_connections", "sum(hikaricp_connections_active{job=\"%s\"})".formatted(service));
+        String requests = "http_server_requests_seconds_count{job=\"%s\",uri!~\"/actuator/.*\"}".formatted(service);
+        String errors = "http_server_requests_seconds_count{job=\"%s\",status=~\"5..\",uri!~\"/actuator/.*\"}".formatted(service);
+        queryMetric(metrics, notes, end, "request_rate", "sum(rate(" + requests + "[5m]))");
+        queryMetric(metrics, notes, end, "error_requests_per_second", "(sum(rate(" + errors + "[5m])) or (sum(rate(" + requests + "[5m])) * 0))");
+        queryMetric(metrics, notes, end, "error_rate_percent",
+                "100 * (sum(rate(" + errors + "[5m])) or (sum(rate(" + requests + "[5m])) * 0)) / clamp_min(sum(rate(" + requests + "[5m])), 0.001)");
+        queryMetric(metrics, notes, end, "p95_latency_seconds",
+                "histogram_quantile(0.95,sum by(le)(rate(http_server_requests_seconds_bucket{job=\"%s\",uri!~\"/actuator/.*\"}[5m])))".formatted(service));
+        if (!"api-gateway".equals(service) && !"notification-service".equals(service)) {
+            queryMetric(metrics, notes, end, "active_db_connections",
+                    "sum(hikaricp_connections_active{job=\"%s\"})".formatted(service));
+        }
 
         return new IncidentEvidence(service, alert.alertName(), alert.severity(), Map.copyOf(metrics),
                 fetchLogs(service, start, end, notes), fetchTraces(service, start, end, notes), List.copyOf(notes));
+    }
+
+    private Instant evidenceTime(AlertmanagerWebhook.Alert alert, List<String> notes) {
+        String startsAt = alert.startsAt();
+        Instant now = Instant.now();
+        if (startsAt == null || startsAt.isBlank()) {
+            notes.add("Alert startsAt missing; using investigation time.");
+            return now;
+        }
+        try {
+            Instant alertStart = Instant.parse(startsAt);
+            if (!alertStart.isAfter(now)) {
+                // Alert rules persist for two minutes (three minutes for ServiceUnavailable).
+                // Query the historical window when the condition first became firing.
+                Duration pending = "ServiceUnavailable".equals(alert.alertName())
+                        ? Duration.ofMinutes(3) : Duration.ofMinutes(2);
+                Instant firingWindow = alertStart.plus(pending);
+                return firingWindow.isAfter(now) ? now : firingWindow;
+            }
+            notes.add("Alert startsAt is in the future; using investigation time.");
+        } catch (java.time.format.DateTimeParseException exception) {
+            notes.add("Alert startsAt invalid; using investigation time.");
+        }
+        return now;
     }
 
     private void queryMetric(Map<String, Double> metrics, List<String> notes, Instant end, String name, String query) {
@@ -59,12 +91,15 @@ public class TelemetryEvidenceService {
                 throw new IllegalStateException("Prometheus query failed");
             }
             JsonNode result = response.path("data").path("result");
-            if (!result.isEmpty()) {
-                double value = Double.parseDouble(result.get(0).path("value").get(1).asText());
-                if (Double.isFinite(value)) metrics.put(name, value);
+            if (result.isEmpty()) {
+                notes.add("Metric NO_DATA: " + name);
+                return;
             }
+            double value = Double.parseDouble(result.get(0).path("value").get(1).asText());
+            if (Double.isFinite(value)) metrics.put(name, value);
+            else notes.add("Metric NO_DATA: " + name);
         } catch (Exception exception) {
-            notes.add("Metric unavailable: " + name);
+            notes.add("Metric QUERY_FAILED: " + name);
             log.warn("Unable to collect metric {}: {}", name, exception.getMessage());
         }
     }
