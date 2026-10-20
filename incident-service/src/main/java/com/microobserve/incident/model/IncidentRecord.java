@@ -52,6 +52,7 @@ public class IncidentRecord {
     private Instant detectedAt;
     private Instant updatedAt;
     private Instant resolvedAt;
+    private Instant investigatedAt;
 
     @Version
     private long version;
@@ -73,13 +74,15 @@ public class IncidentRecord {
     }
 
     public boolean investigationFinished() {
-        return status == IncidentStatus.RESOLVED || status == IncidentStatus.INVESTIGATED;
+        return status == IncidentStatus.INVESTIGATED || investigatedAt != null;
     }
 
     public void startInvestigation() {
         if (investigationFinished()) return;
-        status = IncidentStatus.INVESTIGATING;
-        updatedAt = Instant.now();
+        if (status != IncidentStatus.RESOLVED) {
+            status = IncidentStatus.INVESTIGATING;
+            updatedAt = Instant.now();
+        }
     }
 
     public void complete(IncidentAnalysis analysis) {
@@ -89,14 +92,17 @@ public class IncidentRecord {
         evidence = List.copyOf(analysis.evidence());
         affectedServices = List.copyOf(analysis.affectedServices());
         recommendations = List.copyOf(analysis.recommendations());
-        status = IncidentStatus.INVESTIGATED;
-        updatedAt = Instant.now();
+        investigatedAt = Instant.now();
+        if (status != IncidentStatus.RESOLVED) status = IncidentStatus.INVESTIGATED;
+        updatedAt = investigatedAt;
     }
 
     public void failInvestigation() {
         if (investigationFinished()) return;
-        status = IncidentStatus.INVESTIGATION_FAILED;
-        updatedAt = Instant.now();
+        if (status != IncidentStatus.RESOLVED) {
+            status = IncidentStatus.INVESTIGATION_FAILED;
+            updatedAt = Instant.now();
+        }
     }
 
     public void resolve() {
@@ -119,4 +125,5 @@ public class IncidentRecord {
     public Instant detectedAt() { return detectedAt; }
     public Instant updatedAt() { return updatedAt; }
     public Instant resolvedAt() { return resolvedAt; }
+    public Instant investigatedAt() { return investigatedAt; }
 }

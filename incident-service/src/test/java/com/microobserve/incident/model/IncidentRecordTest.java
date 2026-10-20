@@ -3,6 +3,7 @@ package com.microobserve.incident.model;
 import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class IncidentRecordTest {
@@ -16,31 +17,42 @@ class IncidentRecordTest {
     }
 
     @Test
-    void lateWorkerCannotReopenResolvedIncident() {
+    void delayedWorkerPersistsEvidenceWithoutReopeningResolvedIncident() {
         var incident = incident();
         incident.startInvestigation();
         incident.resolve();
-        var resolvedAt = incident.resolvedAt();
-        incident.complete(report("Late result"));
+        var resolution = incident.resolvedAt();
+        incident.complete(report("Late report"));
         incident.failInvestigation();
         incident.startInvestigation();
-        incident.resolve();
         assertThat(incident.status()).isEqualTo(IncidentStatus.RESOLVED);
-        assertThat(incident.resolvedAt()).isEqualTo(resolvedAt);
-        assertThat(incident.title()).isEqualTo("HighErrorRate detected in order-service");
+        assertThat(incident.resolvedAt()).isEqualTo(resolution);
+        assertThat(incident.investigatedAt()).isNotNull();
+        assertThat(incident.title()).isEqualTo("Late report");
+        assertThat(incident.evidence()).contains("error_requests_per_second=2");
     }
 
     @Test
-    void repeatedWorkDoesNotReplaceCompletedReport() {
+    void duplicateDeliveryNeverOverwritesCompletedEvidence() {
+        var incident = incident();
+        incident.complete(report("Original"));
+        var investigatedAt = incident.investigatedAt();
+        incident.complete(report("Duplicate"));
+        incident.failInvestigation();
+        assertThat(incident.title()).isEqualTo("Original");
+        assertThat(incident.investigatedAt()).isEqualTo(investigatedAt);
+        assertThat(incident.status()).isEqualTo(IncidentStatus.INVESTIGATED);
+    }
+
+    @Test
+    void failedAttemptCanBeReprocessedBeforeResolution() {
         var incident = incident();
         incident.startInvestigation();
-        incident.complete(report("First report"));
-        incident.startInvestigation();
-        incident.complete(report("Duplicate report"));
         incident.failInvestigation();
+        assertThat(incident.status()).isEqualTo(IncidentStatus.INVESTIGATION_FAILED);
+        incident.startInvestigation();
+        incident.complete(report("Recovered"));
         assertThat(incident.status()).isEqualTo(IncidentStatus.INVESTIGATED);
-        assertThat(incident.title()).isEqualTo("First report");
-        incident.resolve();
-        assertThat(incident.status()).isEqualTo(IncidentStatus.RESOLVED);
+        assertThat(incident.investigationFinished()).isTrue();
     }
 }

@@ -2,6 +2,7 @@ package com.microobserve.incident.service;
 
 import com.microobserve.incident.config.IncidentProperties;
 import com.microobserve.incident.model.IncidentAnalysis;
+import com.microobserve.incident.model.IncidentStatus;
 import com.microobserve.incident.repository.IncidentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,10 +26,13 @@ public class InvestigationResultService {
         var incident = repository.findById(incidentId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown incident " + incidentId));
         if (incident.investigationFinished()) return false;
+        boolean wasResolved = incident.status() == IncidentStatus.RESOLVED;
         incident.complete(analysis);
         repository.save(incident);
-        outbox.enqueue(incident.id(), properties.notificationTopic(),
-                IncidentService.toEvent(incident, properties.grafanaUrl().toString()));
+        if (!wasResolved) {
+            outbox.enqueue(incident.id(), properties.notificationTopic(),
+                    IncidentService.toEvent(incident, properties.grafanaUrl().toString()));
+        }
         return true;
     }
 

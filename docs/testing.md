@@ -1,46 +1,23 @@
-# Local testing
+# Local testing and failure verification
 
-[← Project overview](../README.md)
+[← Project overview and quick start](../README.md#quick-start) ·
+[Failure scenario matrix](failure-demos.md) · [Operations](operations.md)
 
-## Run locally on Windows
+Start the **complete** stack with the copy-paste steps in the [README](../README.md#quick-start).
+This guide covers testing and diagnosing it **after startup**, without duplicating the
+clone/install instructions. All core services—including Prometheus, Alertmanager, Loki,
+Tempo, Grafana, PostgreSQL and Kafka—are required for the full demonstration.
 
-Install Docker Desktop with Compose and start it. Docker builds the Java services;
-you do not need Java or Maven installed for the Compose walkthrough.
+Before testing:
 
-From the repository directory in PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Choose `POSTGRES_PASSWORD` and `GRAFANA_ADMIN_PASSWORD` in `.env`, then run:
-
-```powershell
-docker compose config --quiet
-docker compose up --build -d --remove-orphans
-docker compose ps
-```
-
-Do not overwrite an existing `.env` or change an existing database password without
-also updating that database. The initial build downloads several large images.
-Wait for the Java containers to become healthy before testing.
-
-| Service | Local address |
-| --- | --- |
-| Incident API | http://localhost:8084/api/incidents |
-| Grafana | http://localhost:3000 |
-| Gateway | http://localhost:9000 |
-| Prometheus | http://localhost:9090 |
-| Alertmanager | http://localhost:9093 |
-
-Everything published by Compose binds to localhost by default. PostgreSQL is exposed
-on the `POSTGRES_PORT` from `.env` (default `5432`) for database inspection; Kafka
-stays inside the Docker network.
-Leave Kafka UI and email disabled
-while learning the core workflow, especially on an 8 GB laptop. If Docker is
-running out of memory, close other applications and check `docker stats`; the full
-observability stack has approximately 3 GB of configured container memory without
-those optional services, so allocate at least 4 GB to Docker.
+- Confirm Java containers report `healthy` with `docker compose ps`. A first build downloads multiple images.
+- If an existing `.env` uses a database password already stored in a Docker volume,
+  don't change it without updating the database. Never commit credentials.
+- On an 8 GB laptop, leave the optional `email` and `tools` profiles disabled;
+  they are not required for the core incident pipeline.
+- Use `docker stats --no-stream` to inspect actual memory usage; the full stack has
+  roughly 3 GB of configured memory limits, so allow at least 4 GB to Docker.
+- All published ports bind to localhost by default; Kafka stays on the Compose network.
 
 ## Retest the incident flow
 
