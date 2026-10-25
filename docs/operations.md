@@ -168,7 +168,9 @@ see [Prometheus storage guidance](https://prometheus.io/docs/prometheus/latest/s
   can still need retry. Resolved-before-firing and stale alert episodes need further work.
 - The outbox provides at-least-once publication, not exactly-once delivery. Run one
   incident-service instance with this configuration. Multi-replica claiming and
-  durable notification deduplication are not implemented.
+  durable notification deduplication are not implemented. Failed investigation DLT
+  records can be selectively replayed with `scripts/replay-dlt.ps1` after the cause
+  is fixed; replay is at-least-once and requires operator verification.
 - Investigation errors are stored as `INVESTIGATION_FAILED`. A Kafka DLT exists but operator replay is not automated
   interface yet. Check service logs; after fixing the cause, reset and retrigger the
   demo. Partial telemetry failures remain visible in the report.
