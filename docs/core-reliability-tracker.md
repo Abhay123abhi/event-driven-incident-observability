@@ -10,7 +10,7 @@ Scope: default (non-AI) Docker Compose stack only. Do not change the separate AI
 | P1 | Repair Loki4j 2.x Logback appender configuration | Merged in PR #50; runtime check pending | Restart containers and check Loki query and logback startup warnings |
 | P1 | Concurrent deduplication and out-of-order firing/resolution | Concurrent insert recovery merged in PR #51; out-of-order episodes pending | Concurrency and lifecycle integration tests |
 | P1 | Controlled DLT inspection and replay | Operator script added; runtime test pending | Kafka outage/retry/replay test without duplicate notifications |
-| P1 | Fast critical and sustained error-rate alerting | Planned | promtool rules tests; avoid duplicate incident storms |
+| P1 | Fast critical and sustained error-rate alerting | Outage threshold reduced to 1m; error/latency remain 2m | CI runs Prometheus `promtool check rules`; verify alert delivery during final local failure test |
 | P2 | Pipeline-specific alerts and dashboard | Planned | Alert coverage and live dashboard data |
 | P2 | Loki/Tempo retention | Planned | Config validation and disk-budget test |
 | P2 | Runtime circuit breaker/retry behavior | Planned | Failure injection and bounded retry/latency assertions |
