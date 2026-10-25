@@ -84,13 +84,29 @@ Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8084/api/incidents/webhook
 The standard smoke test waits for investigation completion; do not expect it to
 pass while the broker remains stopped.
 
+## Inspect and replay one failed investigation
+
+Only use this after the cause is fixed and the incident is `INVESTIGATION_FAILED`. Inspect DLT records and identify the exact partition/offset with the Kafka console tools; do not assume offset 0 or replay the whole topic. Run a dry-run first:
+
+```powershell
+.\\scripts\\replay-dlt.ps1 -Partition 0 -Offset 12
+```
+
+If the script prints the expected incident ID and failed status, replay that exact record explicitly:
+
+```powershell
+.\\scripts\\replay-dlt.ps1 -Partition 0 -Offset 12 -ConfirmReplay
+```
+
+The script checks the incident status, validates the key and JSON payload, and republishes to the original investigation topic. It does not change DLT offsets. Verify the report and logs before any further attempt. Notification replay is intentionally excluded to avoid duplicate email/side effects.
+
 ## What recovers automatically?
 
 - Manual container stop: manually start it again.
 - Injected fault: reset /demo/failures; the sample script does this in finally.
 - Kafka restored: unpublished outbox events are retried.
 - Source metrics recover: Alertmanager sends resolution after evaluation/group delays.
-- Failed investigation: no operator replay API yet.
+- Failed investigation: after bounded retries, inspect `incident-investigation.DLT`; replay a single verified failed event with `scripts/replay-dlt.ps1` (dry-run by default). Notification DLT replay is intentionally not supported.
 - Docker process crash: restart policy can restart the container; unhealthy status alone does not repair it.
 
 The platform detects and investigates; it does not repair business logic.

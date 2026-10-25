@@ -9,11 +9,22 @@ Scope: default (non-AI) Docker Compose stack only. Do not change the separate AI
 | P0 | Verify full Prometheus to incident recovery path | Script ready; runtime check pending | `scripts/verify-pipeline.ps1`; needs local failure-test execution |
 | P1 | Repair Loki4j 2.x Logback appender configuration | Merged in PR #50; runtime check pending | Restart containers and check Loki query and logback startup warnings |
 | P1 | Concurrent deduplication and out-of-order firing/resolution | Concurrent insert recovery merged in PR #51; out-of-order episodes pending | Concurrency and lifecycle integration tests |
-| P1 | Controlled DLT inspection and replay | Planned | Kafka outage/retry/replay test without duplicate notifications |
+| P1 | Controlled DLT inspection and replay | Operator script added; runtime test pending | Kafka outage/retry/replay test without duplicate notifications |
 | P1 | Fast critical and sustained error-rate alerting | Planned | promtool rules tests; avoid duplicate incident storms |
 | P2 | Pipeline-specific alerts and dashboard | Planned | Alert coverage and live dashboard data |
 | P2 | Loki/Tempo retention | Planned | Config validation and disk-budget test |
 | P2 | Runtime circuit breaker/retry behavior | Planned | Failure injection and bounded retry/latency assertions |
+
+## Controlled Kafka dead-letter replay
+
+Use `scripts/replay-dlt.ps1` only after an investigation event has exhausted bounded retries and the incident is `INVESTIGATION_FAILED`. The script reads one explicitly selected record from `incident-investigation.DLT`, verifies its key, JSON shape and incident status, and defaults to dry-run. It republishes the selected payload to `incident-investigation` only with `-ConfirmReplay`. It does not reset consumer offsets, scan the entire DLT, replay notification events, or add a service. Kafka CLI/runtime behavior still needs consolidated local validation.
+
+```powershell
+.\\scripts\\replay-dlt.ps1 -Partition 0 -Offset 12
+.\\scripts\\replay-dlt.ps1 -Partition 0 -Offset 12 -ConfirmReplay
+```
+
+Replace partition and offset with the record you inspected; do not blindly reuse the example offset. A replay is at-least-once; inspect incident state and logs before retrying.
 
 ## Loki4j logging fix
 
