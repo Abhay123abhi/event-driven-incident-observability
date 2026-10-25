@@ -1,8 +1,6 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidatePattern('^[a-zA-Z0-9._-]+\.DLT$')]
-    [string]$DeadLetterTopic,
     [Parameter(Mandatory)]
     [ValidateRange(0, 2147483647)]
     [int]$Partition,
@@ -13,10 +11,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$destinationTopic = $DeadLetterTopic.Substring(0, $DeadLetterTopic.Length - 4)
-if ($destinationTopic -notin @('incident-investigation', 'incident-notification')) {
-    throw "Refusing unknown destination topic '$destinationTopic'. Only known incident topics are supported."
-}
+$DeadLetterTopic = 'incident-investigation.DLT'
+$destinationTopic = 'incident-investigation'
 
 # Read exactly one selected record. This does not consume an entire DLT or change its offsets.
 $consumerArgs = @('compose','exec','-T','broker','kafka-console-consumer','--bootstrap-server','broker:29092','--topic',$DeadLetterTopic,'--partition',[string]$Partition,'--offset',[string]$Offset,'--max-messages','1','--timeout-ms','10000','--property','print.key=true','--property','key.separator=|')
@@ -29,7 +25,7 @@ $key = $match.Groups[1].Value
 $payload = $match.Groups[2].Value
 try { $event = $payload | ConvertFrom-Json -ErrorAction Stop } catch { throw 'DLT payload is not valid JSON. No replay performed.' }
 if ([string]::IsNullOrWhiteSpace([string]$event.incidentId) -or $key -ne [string]$event.incidentId) { throw 'Event key does not match payload incidentId. No replay performed.' }
-if ($destinationTopic -eq 'incident-investigation' -and $event.PSObject.Properties.Name -notcontains 'alert') { throw 'Investigation event is missing its alert payload. No replay performed.' }
+if ($event.PSObject.Properties.Name -notcontains 'alert') { throw 'Investigation event is missing its alert payload. No replay performed.' }
 if ([string]$event.incidentId -notmatch '^[a-zA-Z0-9-]{1,36}$') { throw 'Unexpected incident ID format. No replay performed.' }
 
 # A replay is allowed only for a known failed investigation; do not duplicate successful work or notifications.
