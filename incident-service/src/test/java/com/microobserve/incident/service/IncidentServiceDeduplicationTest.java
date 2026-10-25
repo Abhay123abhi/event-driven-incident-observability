@@ -69,6 +69,8 @@ class IncidentServiceDeduplicationTest {
                 "inventory-service", "HighErrorRate", "CRITICAL", Instant.now());
         when(repository.findByFingerprintAndStatusNot(FINGERPRINT, IncidentStatus.RESOLVED))
                 .thenReturn(Optional.empty(), Optional.of(winner));
+        when(repository.findFirstByFingerprintOrderByDetectedAtDesc(FINGERPRINT))
+                .thenReturn(Optional.empty());
         when(repository.saveAndFlush(any(IncidentRecord.class)))
                 .thenThrow(new DataIntegrityViolationException("unique active fingerprint"));
         var meters = new SimpleMeterRegistry();
@@ -87,6 +89,8 @@ class IncidentServiceDeduplicationTest {
         var outbox = mock(OutboxService.class);
         when(repository.findByFingerprintAndStatusNot(FINGERPRINT, IncidentStatus.RESOLVED))
                 .thenReturn(Optional.empty());
+        when(repository.findFirstByFingerprintOrderByDetectedAtDesc(FINGERPRINT))
+                .thenReturn(Optional.empty());
         when(repository.saveAndFlush(any(IncidentRecord.class)))
                 .thenThrow(new DataIntegrityViolationException("different constraint"));
         var service = new IncidentService(repository, outbox, properties(),
@@ -103,6 +107,8 @@ class IncidentServiceDeduplicationTest {
         var outbox = mock(OutboxService.class);
         when(repository.findByFingerprintAndStatusNot(FINGERPRINT, IncidentStatus.RESOLVED))
                 .thenReturn(Optional.empty());
+        when(repository.findFirstByFingerprintOrderByDetectedAtDesc(FINGERPRINT))
+                .thenReturn(Optional.empty());
         var service = new IncidentService(repository, outbox, properties(),
                 new SimpleMeterRegistry(), manager());
 
@@ -110,4 +116,66 @@ class IncidentServiceDeduplicationTest {
         verify(repository).saveAndFlush(any(IncidentRecord.class));
         verify(outbox).enqueue(anyString(), eq("incident-investigation"), any());
     }
+    @Test
+    void staleResolutionCannotCloseNewerEpisode() {
+        var repository = mock(IncidentRepository.class);
+        var outbox = mock(OutboxService.class);
+        var newer = new IncidentRecord("new-id", FINGERPRINT, "inventory-service",
+                "HighErrorRate", "CRITICAL", Instant.now());
+        newer.setAlertStartsAt(Instant.parse("2026-10-25T12:00:00Z"));
+        when(repository.findFirstByFingerprintOrderByDetectedAtDesc(FINGERPRINT))
+                .thenReturn(Optional.of(newer));
+        var service = new IncidentService(repository, outbox, properties(),
+                new SimpleMeterRegistry(), manager());
+        var stale = new AlertmanagerWebhook.Alert("resolved", FIRING.labels(),
+                FIRING.annotations(), "2026-10-25T11:00:00Z", "2026-10-25T11:30:00Z", FINGERPRINT);
+
+        assertThat(service.receive(stale)).isEqualTo("new-id");
+        assertThat(newer.status()).isEqualTo(IncidentStatus.RECEIVED);
+        verify(repository, never()).save(any());
+        verifyNoInteractions(outbox);
+    }
+
+    @Test
+    void matchedEpisodeResolvesAndSendsExactlyOneNotification() {
+        var repository = mock(IncidentRepository.class);
+        var outbox = mock(OutboxService.class);
+        var current = new IncidentRecord("active-id", FINGERPRINT, "inventory-service",
+                "HighErrorRate", "CRITICAL", Instant.now());
+        current.setAlertStartsAt(Instant.parse("2026-10-25T12:00:00Z"));
+        when(repository.findFirstByFingerprintOrderByDetectedAtDesc(FINGERPRINT))
+                .thenReturn(Optional.of(current));
+        var service = new IncidentService(repository, outbox, properties(),
+                new SimpleMeterRegistry(), manager());
+        var resolution = new AlertmanagerWebhook.Alert("resolved", FIRING.labels(),
+                FIRING.annotations(), "2026-10-25T12:00:00Z", "2026-10-25T12:30:00Z", FINGERPRINT);
+
+        assertThat(service.receive(resolution)).isEqualTo("active-id");
+        assertThat(service.receive(resolution)).isEqualTo("active-id");
+        assertThat(current.status()).isEqualTo(IncidentStatus.RESOLVED);
+        verify(outbox, times(1)).enqueue(eq("active-id"), eq("incident-notification"), any());
+    }
+
+    @Test
+    void oldFiringWebhookDoesNotReopenResolvedEpisode() {
+        var repository = mock(IncidentRepository.class);
+        var outbox = mock(OutboxService.class);
+        var previous = new IncidentRecord("previous-id", FINGERPRINT, "inventory-service",
+                "HighErrorRate", "CRITICAL", Instant.now());
+        previous.setAlertStartsAt(Instant.parse("2026-10-25T12:00:00Z"));
+        previous.resolve();
+        when(repository.findByFingerprintAndStatusNot(FINGERPRINT, IncidentStatus.RESOLVED))
+                .thenReturn(Optional.empty());
+        when(repository.findFirstByFingerprintOrderByDetectedAtDesc(FINGERPRINT))
+                .thenReturn(Optional.of(previous));
+        var service = new IncidentService(repository, outbox, properties(),
+                new SimpleMeterRegistry(), manager());
+        var stale = new AlertmanagerWebhook.Alert("firing", FIRING.labels(),
+                FIRING.annotations(), "2026-10-25T12:00:00Z", null, FINGERPRINT);
+
+        assertThat(service.receive(stale)).isEqualTo("previous-id");
+        verify(repository, never()).saveAndFlush(any());
+        verifyNoInteractions(outbox);
+    }
+
 }
