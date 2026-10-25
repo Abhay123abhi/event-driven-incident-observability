@@ -12,13 +12,17 @@ import io.micrometer.core.instrument.Gauge;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -28,38 +32,71 @@ public class IncidentService {
     private final OutboxService outbox;
     private final IncidentProperties properties;
     private final MeterRegistry meters;
+    private final TransactionTemplate transactions;
 
     public IncidentService(IncidentRepository repository, OutboxService outbox,
-                           IncidentProperties properties, MeterRegistry meters) {
+                           IncidentProperties properties, MeterRegistry meters,
+                           PlatformTransactionManager transactionManager) {
         this.repository = repository;
         this.outbox = outbox;
         this.properties = properties;
         this.meters = meters;
+        this.transactions = new TransactionTemplate(transactionManager);
         Gauge.builder("incident.active", repository,
                         value -> value.countByStatusNot(IncidentStatus.RESOLVED))
                 .description("Number of incidents that have not been resolved")
                 .register(meters);
     }
 
-    @Transactional
+    /**
+     * The database's partial unique index protects active fingerprints from concurrent
+     * insertions. A competing transaction must roll back before we can re-read the winner.
+     * TransactionTemplate supplies that clean boundary without another service/container.
+     */
     public String receive(AlertmanagerWebhook.Alert alert) {
         String fingerprint = fingerprint(alert);
         if ("resolved".equalsIgnoreCase(alert.status())) {
-            return resolve(fingerprint);
+            return Objects.requireNonNull(transactions.execute(status -> resolve(fingerprint)));
         }
 
+        IngestionResult result;
+        try {
+            result = Objects.requireNonNull(
+                    transactions.execute(status -> receiveFiring(alert, fingerprint)));
+        } catch (DataIntegrityViolationException conflict) {
+            // saveAndFlush triggers the uniqueness check inside the first transaction.
+            // After it rolls back, a new transaction can see the concurrently committed row.
+            String existingId = transactions.execute(status -> repository
+                    .findByFingerprintAndStatusNot(fingerprint, IncidentStatus.RESOLVED)
+                    .map(IncidentRecord::id)
+                    .orElse(null));
+            if (existingId == null) {
+                throw conflict; // Unrelated constraint failure: do not disguise it as a duplicate.
+            }
+            result = new IngestionResult(existingId, true);
+        }
+
+        meters.counter(result.duplicate() ? "incident.duplicate" : "incident.received",
+                "service", alert.service()).increment();
+        return result.incidentId();
+    }
+
+    private IngestionResult receiveFiring(AlertmanagerWebhook.Alert alert, String fingerprint) {
         var existing = repository.findByFingerprintAndStatusNot(fingerprint, IncidentStatus.RESOLVED);
         if (existing.isPresent()) {
-            meters.counter("incident.duplicate", "service", alert.service()).increment();
-            return existing.get().id();
+            return new IngestionResult(existing.get().id(), true);
         }
 
         String id = UUID.randomUUID().toString();
-        repository.save(new IncidentRecord(id, fingerprint, alert.service(), alert.alertName(),
-                alert.severity().toUpperCase(), Instant.now()));
+        // Flush before inserting the outbox event so the unique-index conflict is caught
+        // while the transaction is active. Incident and outbox still commit atomically.
+        repository.saveAndFlush(new IncidentRecord(id, fingerprint, alert.service(), alert.alertName(),
+                alert.severity().toUpperCase(Locale.ROOT), Instant.now()));
         outbox.enqueue(id, properties.investigationTopic(), new InvestigationRequested(id, alert));
-        meters.counter("incident.received", "service", alert.service()).increment();
-        return id;
+        return new IngestionResult(id, false);
+    }
+
+    private record IngestionResult(String incidentId, boolean duplicate) {
     }
 
     @Transactional(readOnly = true)
