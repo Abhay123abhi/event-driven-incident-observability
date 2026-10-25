@@ -194,7 +194,7 @@ services:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9000/actuator/health"]
 
   prometheus:
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.15.1
     restart: unless-stopped
     mem_limit: 256m
     logging: *local-logging
@@ -223,7 +223,7 @@ services:
     networks: [backend]
 
   loki:
-    image: grafana/loki:3.7.8
+    image: grafana/loki:3.7.9
     restart: unless-stopped
     mem_limit: 256m
     logging: *local-logging
@@ -244,7 +244,7 @@ services:
     volumes: [tempo-data:/tmp/tempo]
 
   tempo:
-    image: grafana/tempo:2.10.8
+    image: grafana/tempo:2.10.10
     depends_on:
       tempo-init: { condition: service_completed_successfully }
     restart: unless-stopped
@@ -260,7 +260,7 @@ services:
     networks: [backend]
 
   grafana:
-    image: grafana/grafana:12.4.12
+    image: grafana/grafana:12.4.13
     restart: unless-stopped
     mem_limit: 256m
     logging: *local-logging
