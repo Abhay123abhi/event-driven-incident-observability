@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
@@ -55,14 +56,15 @@ public class IncidentService {
      */
     public String receive(AlertmanagerWebhook.Alert alert) {
         String fingerprint = fingerprint(alert);
+        Instant episodeStart = parseStart(alert.startsAt());
         if ("resolved".equalsIgnoreCase(alert.status())) {
-            return Objects.requireNonNull(transactions.execute(status -> resolve(fingerprint)));
+            return Objects.requireNonNull(transactions.execute(status -> resolve(fingerprint, episodeStart)));
         }
 
         IngestionResult result;
         try {
             result = Objects.requireNonNull(
-                    transactions.execute(status -> receiveFiring(alert, fingerprint)));
+                    transactions.execute(status -> receiveFiring(alert, fingerprint, episodeStart)));
         } catch (DataIntegrityViolationException conflict) {
             // saveAndFlush triggers the uniqueness check inside the first transaction.
             // After it rolls back, a new transaction can see the concurrently committed row.
@@ -81,17 +83,27 @@ public class IncidentService {
         return result.incidentId();
     }
 
-    private IngestionResult receiveFiring(AlertmanagerWebhook.Alert alert, String fingerprint) {
+    private IngestionResult receiveFiring(AlertmanagerWebhook.Alert alert, String fingerprint, Instant episodeStart) {
         var existing = repository.findByFingerprintAndStatusNot(fingerprint, IncidentStatus.RESOLVED);
         if (existing.isPresent()) {
             return new IngestionResult(existing.get().id(), true);
         }
 
+        // A late firing webhook for an already resolved episode must not reopen it.
+        var latest = repository.findFirstByFingerprintOrderByDetectedAtDesc(fingerprint);
+        if (episodeStart != null && latest.isPresent() && latest.get().status() == IncidentStatus.RESOLVED
+                && latest.get().alertStartsAt() != null
+                && !episodeStart.isAfter(latest.get().alertStartsAt())) {
+            return new IngestionResult(latest.get().id(), true);
+        }
+
         String id = UUID.randomUUID().toString();
         // Flush before inserting the outbox event so the unique-index conflict is caught
         // while the transaction is active. Incident and outbox still commit atomically.
-        repository.saveAndFlush(new IncidentRecord(id, fingerprint, alert.service(), alert.alertName(),
-                alert.severity().toUpperCase(Locale.ROOT), Instant.now()));
+        var incident = new IncidentRecord(id, fingerprint, alert.service(), alert.alertName(),
+                alert.severity().toUpperCase(Locale.ROOT), Instant.now());
+        incident.setAlertStartsAt(episodeStart);
+        repository.saveAndFlush(incident);
         outbox.enqueue(id, properties.investigationTopic(), new InvestigationRequested(id, alert));
         return new IngestionResult(id, false);
     }
@@ -119,9 +131,16 @@ public class IncidentService {
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "Incident not found"));
     }
 
-    private String resolve(String fingerprint) {
+    private String resolve(String fingerprint, Instant episodeStart) {
         var incident = repository.findFirstByFingerprintOrderByDetectedAtDesc(fingerprint)
                 .orElseThrow(() -> new IllegalArgumentException("No incident exists for " + fingerprint));
+        // Alertmanager may resend an old resolution after a fresh episode has started.
+        // Without a comparable startsAt value retain legacy behavior.
+        if (episodeStart != null && incident.alertStartsAt() != null
+                && !episodeStart.equals(incident.alertStartsAt())) {
+            meters.counter("incident.duplicate", "service", incident.service()).increment();
+            return incident.id();
+        }
         if (incident.status() == IncidentStatus.RESOLVED) {
             meters.counter("incident.duplicate", "service", incident.service()).increment();
             return incident.id();
@@ -132,6 +151,15 @@ public class IncidentService {
                 toEvent(incident, properties.grafanaUrl().toString()));
         meters.counter("incident.resolved", "service", incident.service()).increment();
         return incident.id();
+    }
+
+    private static Instant parseStart(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid alert startsAt", exception);
+        }
     }
 
     static IncidentEvent toEvent(IncidentRecord incident, String dashboardUrl) {
