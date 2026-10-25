@@ -53,6 +53,7 @@ public class IncidentRecord {
     private Instant updatedAt;
     private Instant resolvedAt;
     private Instant investigatedAt;
+    private Instant alertStartsAt;
 
     @Version
     private long version;
@@ -71,6 +72,10 @@ public class IncidentRecord {
         this.status = IncidentStatus.RECEIVED;
         this.detectedAt = detectedAt;
         this.updatedAt = detectedAt;
+    }
+
+    public void setAlertStartsAt(Instant alertStartsAt) {
+        this.alertStartsAt = alertStartsAt;
     }
 
     public boolean investigationFinished() {
@@ -126,4 +131,5 @@ public class IncidentRecord {
     public Instant updatedAt() { return updatedAt; }
     public Instant resolvedAt() { return resolvedAt; }
     public Instant investigatedAt() { return investigatedAt; }
+    public Instant alertStartsAt() { return alertStartsAt; }
 }
