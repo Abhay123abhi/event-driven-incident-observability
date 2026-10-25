@@ -26,7 +26,7 @@ If /demo/failures returns 404, the demo profile is not enabled in the running co
 | Slow Inventory | `./scripts/failure-test.ps1 -Scenario latency` | P95 above 2s for 2m, with sufficient traffic | Script resets delay after 5m |
 | Inventory errors | `./scripts/failure-test.ps1 -Scenario errors` | More than 5% HTTP 5xx for 2m, with sufficient traffic | Script resets errors after 5m |
 | Downstream API failure | `./scripts/failure-test.ps1 -Scenario downstream` | Gateway → Order → failing Inventory; expect HTTP 503 for unavailable dependency, never misleading HTTP 409 (out of stock); verify proxy behavior at runtime | Script resets Inventory after 5m; send a fresh request |
-| Service down | `docker compose stop inventory-service` | ServiceUnavailable after scrape failure persists for 3m | `docker compose start inventory-service` |
+| Service down | `docker compose stop inventory-service` | ServiceUnavailable after scrape failure persists for 1m | `docker compose start inventory-service` |
 | Duplicate alert | `./scripts/smoke-test.ps1` | Same fingerprint reuses incident ID; typically completes within its 120s wait | Script submits resolved webhook |
 | Missing logs | Stop Loki, run smoke test, start Loki | Report includes Loki collection failure; metrics still available | New reports can use restored Loki |
 | Missing traces | Stop Tempo, run smoke test, start Tempo | Report includes Tempo collection failure | New reports can use restored Tempo |
