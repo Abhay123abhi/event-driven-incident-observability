@@ -11,31 +11,20 @@
         </encoder>
     </appender>
 
+    <!-- Loki4j 2.x: labels and message moved out of the removed <format> section. -->
     <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
         <http>
             <url>${LOKI_URL}</url>
             <connectionTimeoutMs>5000</connectionTimeoutMs>
             <requestTimeoutMs>5000</requestTimeoutMs>
         </http>
-        <format>
-            <label>
-                <pattern>service=order-service,level=%level</pattern>
-            </label>
-            <message>
-                <pattern>
-                    {
-                        "timestamp":"${timestamp}",
-                        "level":"%level",
-                        "thread":"%thread",
-                        "logger":"%logger{36}",
-                        "trace_id":"%X{traceId}",
-                        "span_id":"%X{spanId}",
-                        "message":"%message",
-                        "stacktrace":"%exception"
-                    }
-                </pattern>
-            </message>
-        </format>
+        <labels>service=order-service</labels>
+        <structuredMetadata>
+            level=%level
+            thread=%thread
+        </structuredMetadata>
+        <!-- JSON layout safely escapes messages and exceptions, and includes MDC trace/span IDs. -->
+        <message class="com.github.loki4j.logback.JsonLayout"/>
     </appender>
 
     <root level="INFO">
