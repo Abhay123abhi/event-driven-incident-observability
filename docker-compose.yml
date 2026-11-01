@@ -209,7 +209,7 @@ services:
     networks: [backend]
 
   alertmanager:
-    image: prom/alertmanager:v0.34.1
+    image: prom/alertmanager:v0.34.2
     restart: unless-stopped
     mem_limit: 128m
     logging: *local-logging
@@ -260,7 +260,7 @@ services:
     networks: [backend]
 
   grafana:
-    image: grafana/grafana:12.4.13
+    image: grafana/grafana:12.4.14
     restart: unless-stopped
     mem_limit: 256m
     logging: *local-logging
