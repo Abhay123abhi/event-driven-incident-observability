@@ -194,7 +194,7 @@ services:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9000/actuator/health"]
 
   prometheus:
-    image: prom/prometheus:v3.15.1
+    image: prom/prometheus:v3.16.0
     restart: unless-stopped
     mem_limit: 256m
     logging: *local-logging
@@ -209,7 +209,7 @@ services:
     networks: [backend]
 
   alertmanager:
-    image: prom/alertmanager:v0.34.1
+    image: prom/alertmanager:v0.35.0
     restart: unless-stopped
     mem_limit: 128m
     logging: *local-logging
@@ -223,7 +223,7 @@ services:
     networks: [backend]
 
   loki:
-    image: grafana/loki:3.7.9
+    image: grafana/loki:3.7.10
     restart: unless-stopped
     mem_limit: 256m
     logging: *local-logging
@@ -260,7 +260,7 @@ services:
     networks: [backend]
 
   grafana:
-    image: grafana/grafana:12.4.13
+    image: grafana/grafana:12.4.15
     restart: unless-stopped
     mem_limit: 256m
     logging: *local-logging
